@@ -16,3 +16,5 @@ test-results/
 backend/jinjuhub.db
 backend/e2e.db
 .vscode/
+.neon
+.env.local
