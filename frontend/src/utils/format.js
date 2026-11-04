@@ -42,3 +42,22 @@ export function formatDateRange(start, end) {
   if (s.y !== e.y) return `${s.y}.${s.m}.${s.d} ~ ${e.y}.${e.m}.${e.d}`
   return `${s.m}.${s.d} ~ ${e.m}.${e.d}`
 }
+
+// http(s) URLs only; anything else (javascript:, data:, ...) yields null.
+export function safeUrl(u) {
+  if (!u) return null
+  const s = String(u).trim()
+  return /^https?:\/\//i.test(s) ? s : null
+}
+
+// First phone number in a free-text field -> tel: href, or null without digits.
+export function telHref(raw) {
+  if (!raw) return null
+  const first = String(raw)
+    .split(/[,;/\n]/)
+    .map((x) => x.trim())
+    .find((x) => /\d/.test(x))
+  if (!first) return null
+  const num = first.replace(/[^\d+]/g, '')
+  return /\d/.test(num) ? `tel:${num}` : null
+}

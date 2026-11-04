@@ -20,7 +20,6 @@ function toggle(place) {
         :saved="lanterns.isSaved(p.id)"
         :lit="lanterns.isLit(p.id)"
         @toggle-save="toggle"
-        @select="() => {}"
       />
     </li>
   </ul>

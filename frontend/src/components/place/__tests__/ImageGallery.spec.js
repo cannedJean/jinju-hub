@@ -33,4 +33,9 @@ describe('ImageGallery', () => {
     expect(w.find('img').exists()).toBe(false)
     expect(w.findComponent({ name: 'ImagePlaceholder' }).exists()).toBe(true)
   })
+
+  test('missing license falls back', () => {
+    const w = mount(ImageGallery, { props: { images: [{ url: 'a', source: 'A' }] } })
+    expect(w.text()).toContain('라이선스 정보 없음')
+  })
 })

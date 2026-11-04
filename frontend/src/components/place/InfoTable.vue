@@ -1,14 +1,8 @@
 <script setup>
 import { computed } from 'vue'
-import { formatDateRange } from '../../utils/format'
+import { formatDateRange, safeUrl, telHref } from '../../utils/format'
 
 const props = defineProps({ place: { type: Object, required: true } })
-
-function safeUrl(u) {
-  if (!u) return null
-  const s = String(u).trim()
-  return /^https?:\/\//i.test(s) ? s : null
-}
 
 const rows = computed(() => {
   const p = props.place
@@ -18,7 +12,7 @@ const rows = computed(() => {
     { key: 'closed', label: '휴무', value: p.closed_days },
     { key: 'fee', label: '요금', value: p.fee },
     { key: 'parking', label: '주차', value: p.parking },
-    { key: 'phone', label: '전화', value: p.phone, href: p.phone ? `tel:${String(p.phone).replace(/[^\d+]/g, '')}` : null },
+    { key: 'phone', label: '전화', value: p.phone, href: telHref(p.phone) },
     { key: 'home', label: '홈페이지', value: p.homepage, href: safeUrl(p.homepage), external: true },
     { key: 'menu', label: '메뉴', value: p.menu },
     { key: 'period', label: '기간', value: period },

@@ -28,8 +28,8 @@ const usable = computed(() => props.images.filter((im) => im && im.url && !faile
 const current = computed(() => usable.value[Math.min(index.value, usable.value.length - 1)] || null)
 
 function caption(im) {
-  const license = LICENSE_LABELS[im.license] ?? im.license ?? ''
-  return ['출처: ' + (im.source || '알 수 없음'), license].filter(Boolean).join(' · ')
+  const license = LICENSE_LABELS[im.license] ?? (im.license || '라이선스 정보 없음')
+  return `출처: ${im.source || '알 수 없음'} · ${license}`
 }
 
 function onError(url) {

@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchPlace } from '../api/places'
 import { useLanternsStore } from '../stores/lanterns'
-import { categoryLabel } from '../utils/format'
+import { categoryLabel, safeUrl } from '../utils/format'
 import StateView from '../components/StateView.vue'
 import ImageGallery from '../components/place/ImageGallery.vue'
 import InfoTable from '../components/place/InfoTable.vue'
@@ -34,10 +34,19 @@ const badge = computed(() => {
   if (p.is_collection) return '유등 30선'
   return ''
 })
-const sources = computed(() => (place.value?.sources || []).filter((s) => s.source_url))
+const sources = computed(() => (place.value?.sources || []).map((s) => ({ ...s, href: safeUrl(s.source_url) })).filter((s) => s.href))
 
 async function load() {
   const mine = ++seq
+  if (route.name !== 'place' || !id.value) {
+    loading.value = false
+    return
+  }
+  // Already showing this place (e.g. after the alias replace below): nothing to fetch.
+  if (place.value && place.value.id === id.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   error.value = false
   notFound.value = false
@@ -48,6 +57,8 @@ async function load() {
     if (mine !== seq) return
     if (data.canonical_id && data.canonical_id !== requested) {
       lanterns.migrateId(requested, data.canonical_id)
+      place.value = data
+      loading.value = false
       await router.replace({ name: 'place', params: { id: data.canonical_id } })
       return
     }
@@ -61,7 +72,7 @@ async function load() {
   }
 }
 
-watch(id, load, { immediate: true })
+watch([id, () => route.name], load, { immediate: true })
 
 function removeTombstone() {
   lanterns.unsave(id.value)
@@ -137,7 +148,7 @@ function removeTombstone() {
             <p>출처: 한국관광공사 TourAPI · 진주시 공공데이터</p>
             <ul v-if="sources.length" class="mt-1 flex flex-wrap gap-x-3">
               <li v-for="s in sources" :key="s.source + s.source_url">
-                <a :href="s.source_url" target="_blank" rel="noopener noreferrer" class="underline">{{ s.source }} 원문</a>
+                <a :href="s.href" target="_blank" rel="noopener noreferrer" class="underline">{{ s.source }} 원문</a>
               </li>
             </ul>
           </footer>

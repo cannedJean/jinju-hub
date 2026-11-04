@@ -66,4 +66,41 @@ describe('PlaceDetailView', () => {
     expect(lanterns.isSaved('new')).toBe(true)
     expect(lanterns.isSaved('old')).toBe(false)
   })
+
+  test('javascript: source links are not rendered', async () => {
+    fetchPlace.mockResolvedValue({
+      ...detail,
+      sources: [
+        { source: '나쁨', source_url: 'javascript:alert(1)' },
+        { source: '좋음', source_url: 'https://example.com/a' },
+      ],
+    })
+    const { w } = await mountAt('/places/p1')
+    const hrefs = w.findAll('footer a').map((a) => a.attributes('href'))
+    expect(hrefs).toEqual(['https://example.com/a'])
+  })
+
+  test('leaving the place route does not refetch with an empty id', async () => {
+    fetchPlace.mockResolvedValue(detail)
+    const { router } = await mountAt('/places/p1')
+    expect(fetchPlace).toHaveBeenCalledTimes(1)
+    await router.push('/explore')
+    await flushPromises()
+    expect(fetchPlace).toHaveBeenCalledTimes(1)
+  })
+
+  test('route param change refetches', async () => {
+    fetchPlace.mockImplementation((id) => Promise.resolve({ ...detail, id, canonical_id: id, title: 'T' + id }))
+    const { w, router } = await mountAt('/places/p1')
+    await router.push('/places/p2')
+    await flushPromises()
+    expect(fetchPlace).toHaveBeenLastCalledWith('p2')
+    expect(w.text()).toContain('Tp2')
+  })
+
+  test('alias does not fetch twice', async () => {
+    fetchPlace.mockResolvedValue({ ...detail, id: 'new', canonical_id: 'new' })
+    await mountAt('/places/old')
+    expect(fetchPlace).toHaveBeenCalledTimes(1)
+  })
 })
