@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import festivals, health, meta, places, posts
+from app.api.v1.endpoints import festivals, health, meta, places, posts, weather
 
 router = APIRouter()
 
@@ -10,3 +10,4 @@ router.include_router(meta.router, tags=["meta"])
 router.include_router(places.router, tags=["places"])
 router.include_router(festivals.router, tags=["festivals"])
 router.include_router(posts.router, prefix="/posts", tags=["posts"])
+router.include_router(weather.router, tags=["weather"])
