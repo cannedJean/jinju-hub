@@ -85,3 +85,31 @@ def previous_snapshot():
         )
 
     return _make
+
+
+@pytest.fixture
+def region(repo_root):
+    from jinju_pipeline.region import load_region
+
+    return load_region(repo_root / "config" / "region.yaml")
+
+
+@pytest.fixture
+def city_raws():
+    from helpers import city_raws_from_fixture
+
+    return city_raws_from_fixture("tourinfo")
+
+
+@pytest.fixture
+def tour_raw_126508():
+    from helpers import make_tour_raw_126508
+
+    return make_tour_raw_126508()
+
+
+@pytest.fixture
+def tour_raw_hidden():
+    from helpers import make_tour_raw_hidden
+
+    return make_tour_raw_hidden()
