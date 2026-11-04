@@ -1,0 +1,7 @@
+id: jinju
+name: 진주시
+center: {lat: 35.18, lng: 128.108}
+bbox: {min_lat: 35.05, max_lat: 35.33, min_lng: 127.93, max_lng: 128.30}
+bbox_margin_deg: 0.02
+ldong: {regn_cd: "48", signgu_cd: "170"}
+address_keyword: 진주

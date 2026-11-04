@@ -1,0 +1,1 @@
+"""JinjuHub backend application package."""
