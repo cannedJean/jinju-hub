@@ -182,6 +182,8 @@ class TourApiAreaSource:
                 old is not None and cid not in pending_ids
                 and (old.payload.get("list") or {}).get("modifiedtime") == item.get("modifiedtime")
                 and not old.payload.get("detail_pending")
+                and "detail_error" not in old.payload
+                and "common" in old.payload
             ):
                 results[cid] = old
             else:
@@ -236,7 +238,7 @@ class TourApiAreaSource:
         except QuotaExceeded:
             state["quota"] = True
             payload["detail_pending"] = True
-        except UpstreamError as e:  # ConfigError is not an UpstreamError and propagates
+        except (UpstreamError, httpx.TransportError) as e:  # ConfigError propagates
             payload["detail_error"] = str(e)
         return record()
 

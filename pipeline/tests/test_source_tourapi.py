@@ -314,3 +314,32 @@ async def test_verify_codes_reports_counts(ctx_factory, fixture_json):
     assert set(res["counts"]) == set(CONTENT_TYPES) and res["counts"][12] == 7
     lp = fake.ops("ldongCode2")[0].url.params
     assert lp["lDongRegnCd"] == "48" and lp["lDongListYn"] == "Y"
+
+
+async def test_previous_detail_error_is_refetched(ctx_factory, fixture_json, previous_snapshot):
+    old = _prev_record(fixture_json)
+    old.payload["detail_error"] = "HTTP 503"
+    del old.payload["common"]
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
+    ctx.previous = previous_snapshot({"tourapi.area": [old]})
+    recs = await TourApiAreaSource().collect(ctx)
+    assert "126508" in [r.url.params["contentId"] for r in fake.ops("detailCommon2")]
+    r = next(x for x in recs if x.source_id == "126508")
+    assert "detail_error" not in r.payload and r.payload["common"]["title"] == "진주성"
+
+
+async def test_transport_error_marks_item_and_continues(ctx_factory, fixture_json):
+    fake = FakeTour(fixture_json)
+
+    async def handler(request):
+        if request.url.path.endswith("detailCommon2") and request.url.params["contentId"] == "126508":
+            raise httpx.ConnectTimeout("boom", request=request)
+        return await fake(request)
+
+    ctx = ctx_factory(httpx.MockTransport(handler), **KEY)
+    recs = await TourApiAreaSource().collect(ctx)
+    assert len(recs) == 12
+    bad = next(r for r in recs if r.source_id == "126508")
+    assert "detail_error" in bad.payload and "common" not in bad.payload
+    assert all("common" in r.payload and "detail_error" not in r.payload for r in recs if r.source_id != "126508")
