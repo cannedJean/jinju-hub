@@ -102,10 +102,10 @@ def city_raws():
 
 
 @pytest.fixture
-def tour_raw_126508():
-    from helpers import make_tour_raw_126508
+def tour_raw_126833():
+    from helpers import make_tour_raw_126833
 
-    return make_tour_raw_126508()
+    return make_tour_raw_126833()
 
 
 @pytest.fixture
@@ -171,12 +171,12 @@ def _recorded_handler(city_kinds=None, tour=True):
                 return httpx.Response(200, json=load("tourapi/festival_p1.json"))
             if op == "ldongCode2":
                 return httpx.Response(200, json=load("tourapi/ldong_48.json"))
-            if cid == "126508" and op == "detailCommon2":
-                return httpx.Response(200, json=load("tourapi/detail_common_126508.json"))
-            if cid == "126508" and op == "detailIntro2":
-                return httpx.Response(200, json=load("tourapi/detail_intro_126508_12.json"))
-            if cid == "126508" and op == "detailImage2":
-                return httpx.Response(200, json=load("tourapi/detail_image_126508.json"))
+            if cid == "126833" and op == "detailCommon2":
+                return httpx.Response(200, json=load("tourapi/detail_common_126833.json"))
+            if cid == "126833" and op == "detailIntro2":
+                return httpx.Response(200, json=load("tourapi/detail_intro_126833_12.json"))
+            if cid == "126833" and op == "detailImage2":
+                return httpx.Response(200, json=load("tourapi/detail_image_126833.json"))
             return httpx.Response(200, json=tour_empty)
         return httpx.Response(404)
 

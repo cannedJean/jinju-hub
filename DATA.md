@@ -28,16 +28,33 @@ JinjuHub의 장소 데이터는 `pipeline/`이 공공 API에서 모아 정제·�
 응답 키 total=`record_count`, items=`results`, `xposition`=위도·`yposition`=경도(뒤바뀌는 경우가 있어 값 범위로 판별).
 같은 `idx`가 두 페이지에 중복으로 나오는 경우가 있다(병합 단계에서 하나로 합쳐짐).
 
-**TourAPI 코드 검증·보강: 키 발급 후 실행 예정.** `DATA_GO_KR_KEY`가 없으면 파이프라인은 TourAPI 소스를 건너뛰고(경고 로그)
-진주시 OpenAPI만으로 `places.db`를 만든다. 키를 받으면 `pipeline/.env`에 넣고 아래 순서로 실행해 결과를 이 절에 기록한다.
+**TourAPI 코드 검증(2026-11-04 실행, `verify-codes`)**: `signgu_ok: true` — `ldongCode2`(lDongRegnCd=48)에서
+`lDongSignguCd=170` = **진주시** 확인, `config/region.yaml` 수정 없음. 타입별 `totalCount`(lDongRegnCd=48·lDongSignguCd=170):
+
+| 12 관광지 | 14 문화시설 | 15 축제공연행사 | 25 여행코스 | 28 레포츠 | 32 숙박 | 38 쇼핑 | 39 음식점 | 합계 |
+|---|---|---|---|---|---|---|---|---|
+| 57 | 18 | 8 | 0 | 5 | 10 | 53 | 48 | 199 |
 
 ```powershell
 cd pipeline
-.venv\Scripts\python -m jinju_pipeline verify-codes   # 기대: "signgu_ok": true, 8개 타입별 count
+.venv\Scripts\python -m jinju_pipeline verify-codes   # "signgu_ok": true, 8개 타입별 count
 .venv\Scripts\python -m jinju_pipeline run            # 쿼터로 detail_pending > 0 이면 다음 날 run 1회 더(상세 이어받기)
 ```
 
-`verify-codes`는 키가 없으면 종료 코드 2와 함께 "설정 오류: DATA_GO_KR_KEY가 설정되지 않았습니다…"를 출력하고 끝난다.
+`DATA_GO_KR_KEY`가 없거나 빈 값(`DATA_GO_KR_KEY=`·공백)이면 파이프라인은 TourAPI 소스를 건너뛰고(경고 로그) 진주시 OpenAPI만으로
+`places.db`를 만들며, `verify-codes`는 종료 코드 2와 함께 "설정 오류: DATA_GO_KR_KEY가 설정되지 않았습니다…"를 출력한다.
+CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey`가 들어 있기 때문이다.
+
+**TourAPI 실응답에서 확인한 사실(2026-11-04 녹화, `pipeline/tests/fixtures/tourapi/`)**
+
+- 목록(`areaBasedList2`)의 `tel`은 관광지 57건 **전부 빈 값**이고, `detailCommon2`의 `tel`도 빈 경우가 있다(진주성).
+  전화는 `detailIntro2`의 안내 번호(`infocenter`·`infocenterculture`·`infocenterfood`… / 축제 `sponsor1tel`)로 보완한다.
+- 목록 `firstimage`는 57건 중 17건이 `http://` → `tong.visitkorea.or.kr`은 https로 올려 저장. 저작권 유형은 Type1·Type3 혼재.
+- `homepage`는 `<a href>` 태그가 아니라 맨 URL로 오는 경우가 있다(둘 다 처리).
+- `detailImage2`는 `numOfRows`를 주지 않으면 10건만 준다(진주성 totalCount 15). 이미지 10장이면 충분해 그대로 둔다.
+- `areaBasedSyncList2`의 `modifiedtime`은 "이후"가 아니라 **접두 일치**다(`20261001` → 0건, `20261023` → 2건, `202610` → 41건).
+  증분 모드는 직전 실행 월부터 이번 달까지 `YYYYMM`으로 한 번씩 조회하고 직전 실행일 이후 수정분만 쓴다. 숨김 항목(`showflag=0`)도 실제로 온다.
+- 목록에 `areacode`/`sigungucode`가 채워져 오지만(구 코드) 쓰지 않는다. 필터는 `lDongRegnCd`/`lDongSignguCd`만.
 
 ### 1.2 검토 후 제외 (사유)
 
@@ -92,7 +109,7 @@ cd pipeline
 |---|---|
 | 좌표 | 문자열→float. **이름이 아니라 값 범위로 위경도 판별**(lat 33~39, lng 124~132; 진주시 API의 x/y 뒤바뀜 자동 교정). `config/region.yaml` 진주 bbox(lat 35.05~35.33, lng 127.93~128.30, 여유 0.02°) 밖이면: 주소에 "진주"가 있으면 좌표만 비우고 유지(`geo_status=out_of_region`, 지도 제외·목록 노출), 없으면 드롭(`out_of_region`). `0,0`/빈값은 `geo_status=missing` |
 | 텍스트 | HTML 태그 제거(selectolax), 엔티티 디코드, `<br>`→개행, 연속 공백 정리, trim |
-| 전화 | 첫 번호만 숫자 추출 후 `055-XXX-XXXX` 등 한국 형식으로 포맷(나머지는 raw에 보존) |
+| 전화 | 첫 번호만 숫자 추출 후 `055-XXX-XXXX` 등 한국 형식으로 포맷(나머지는 raw에 보존). TourAPI는 `detailCommon2.tel` → 목록 `tel` → `detailIntro2` 안내 번호 순 |
 | URL·이미지 | 화이트리스트 도메인 `http→https`, 진주시 `/CmsMultiFile/view.do` 상대경로 → 절대 URL |
 | 운영시간/휴무/요금 | 원문 보존 + 줄바꿈 정규화. 구조화 파싱은 하지 않음(오해석 위험) |
 | 카테고리 | 소스별 원 분류 → 통합 카테고리(아래 표). 진주시 관광지 중 분류명에 "문화·박물관·전시"가 있으면 culture |

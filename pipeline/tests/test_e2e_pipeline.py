@@ -91,7 +91,7 @@ async def test_pipeline_with_tourapi_sources_offline(tmp_settings, recorded_tran
     assert status["tourapi.area"] == "ok" and status["tourapi.festival"] == "ok"
     with closing(sqlite3.connect(settings.output_db)) as con:
         n = con.execute("select count(*) from place_sources where source like 'tourapi.%'").fetchone()[0]
-    assert n == 12 + 3
+    assert n == 57 + 8  # recorded areaBasedList2 type 12 (57) + searchFestival2 (8)
 
 
 def test_cli_run_exit_0_and_out_path(tmp_settings, recorded_transport, tmp_path, capsys):

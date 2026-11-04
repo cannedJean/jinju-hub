@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import math
-from datetime import datetime
+from datetime import date, datetime
 
 import httpx
 
@@ -124,6 +124,16 @@ class TourApiFestivalSource:
         ]
 
 
+def sync_month_prefixes(since: date, today: date) -> list[str]:
+    """areaBasedSyncList2 ``modifiedtime`` is a prefix match (YYYY / YYYYMM / YYYYMMDD), not "since"
+    (recorded 2026-11-04: ``20261001`` -> 0 items, ``20261023`` -> 2, ``202610`` -> 41). Query each month."""
+    months, y, m = [], since.year, since.month
+    while (y, m) <= (today.year, today.month) or not months:
+        months.append(f"{y:04d}{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return months
+
+
 class TourApiAreaSource:
     name = AREA
 
@@ -141,11 +151,20 @@ class TourApiAreaSource:
         now = datetime.now(KST)
 
         if incremental:
-            since = ctx.previous.generated_at.astimezone(KST).strftime("%Y%m%d")
-            changed = await _paged(
-                ctx, self.name, "areaBasedSyncList2",
-                {"modifiedtime": since, **_region_params(ctx.region)}, page_no,
-            )
+            since = ctx.previous.generated_at.astimezone(KST).date()
+            pages = await asyncio.gather(*(
+                _paged(ctx, self.name, "areaBasedSyncList2",
+                       {"modifiedtime": month, **_region_params(ctx.region)}, page_no)
+                for month in sync_month_prefixes(since, ctx.today)
+            ))
+            latest: dict[str, dict] = {}
+            for item in (i for chunk in pages for i in chunk):
+                if str(item.get("modifiedtime", ""))[:8] < since.strftime("%Y%m%d"):
+                    continue  # same month, but before the previous run
+                cid = str(item["contentid"])
+                if cid not in latest or str(item.get("modifiedtime", "")) > str(latest[cid].get("modifiedtime", "")):
+                    latest[cid] = item
+            changed = list(latest.values())
             for item in changed:
                 cid = str(item["contentid"])
                 if str(item.get("showflag", "1")) == "0":

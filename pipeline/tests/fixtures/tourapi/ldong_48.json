@@ -1,5 +1,4 @@
 {
-  "_handmade": true,
   "response": {
     "header": {
       "resultCode": "0000",
@@ -9,38 +8,171 @@
       "items": {
         "item": [
           {
-            "rnum": "1",
             "lDongRegnCd": "48",
             "lDongRegnNm": "경상남도",
-            "lDongSignguCd": "110",
-            "lDongSignguNm": "창원시"
+            "lDongSignguCd": "120",
+            "lDongSignguNm": "창원시",
+            "rnum": 1
           },
           {
-            "rnum": "1",
             "lDongRegnCd": "48",
             "lDongRegnNm": "경상남도",
-            "lDongSignguCd": "150",
-            "lDongSignguNm": "통영시"
+            "lDongSignguCd": "121",
+            "lDongSignguNm": "창원시 의창구",
+            "rnum": 2
           },
           {
-            "rnum": "1",
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "123",
+            "lDongSignguNm": "창원시 성산구",
+            "rnum": 3
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "125",
+            "lDongSignguNm": "창원시 마산합포구",
+            "rnum": 4
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "127",
+            "lDongSignguNm": "창원시 마산회원구",
+            "rnum": 5
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "129",
+            "lDongSignguNm": "창원시 진해구",
+            "rnum": 6
+          },
+          {
             "lDongRegnCd": "48",
             "lDongRegnNm": "경상남도",
             "lDongSignguCd": "170",
-            "lDongSignguNm": "진주시"
+            "lDongSignguNm": "진주시",
+            "rnum": 7
           },
           {
-            "rnum": "1",
             "lDongRegnCd": "48",
             "lDongRegnNm": "경상남도",
-            "lDongSignguCd": "190",
-            "lDongSignguNm": "사천시"
+            "lDongSignguCd": "220",
+            "lDongSignguNm": "통영시",
+            "rnum": 8
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "240",
+            "lDongSignguNm": "사천시",
+            "rnum": 9
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "250",
+            "lDongSignguNm": "김해시",
+            "rnum": 10
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "270",
+            "lDongSignguNm": "밀양시",
+            "rnum": 11
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "310",
+            "lDongSignguNm": "거제시",
+            "rnum": 12
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "330",
+            "lDongSignguNm": "양산시",
+            "rnum": 13
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "720",
+            "lDongSignguNm": "의령군",
+            "rnum": 14
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "730",
+            "lDongSignguNm": "함안군",
+            "rnum": 15
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "740",
+            "lDongSignguNm": "창녕군",
+            "rnum": 16
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "820",
+            "lDongSignguNm": "고성군",
+            "rnum": 17
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "840",
+            "lDongSignguNm": "남해군",
+            "rnum": 18
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "850",
+            "lDongSignguNm": "하동군",
+            "rnum": 19
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "860",
+            "lDongSignguNm": "산청군",
+            "rnum": 20
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "870",
+            "lDongSignguNm": "함양군",
+            "rnum": 21
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "880",
+            "lDongSignguNm": "거창군",
+            "rnum": 22
+          },
+          {
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "890",
+            "lDongSignguNm": "합천군",
+            "rnum": 23
           }
         ]
       },
-      "numOfRows": 100,
+      "numOfRows": 23,
       "pageNo": 1,
-      "totalCount": 4
+      "totalCount": 23
     }
   }
 }

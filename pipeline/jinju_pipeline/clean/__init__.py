@@ -97,6 +97,7 @@ def _clean_tourapi(raw: RawRecord, region: Region) -> CleanRecord | str:
     start = parse_date(_s(intro.get(spec.get("start_date") or "")) or _s(lst.get("eventstartdate")))
     end = parse_date(_s(intro.get(spec.get("end_date") or "")) or _s(lst.get("eventenddate")))
 
+    phone = _s(common.get("tel")) or _s(lst.get("tel")) or _intro_value(intro, spec.get("phone"))
     first_lic = _s(lst.get("cpyrhtDivCd")) or TOUR_DEFAULT_LICENSE
     imgs: list[tuple[str | None, str]] = [(normalize_url(lst.get("firstimage")), first_lic)]
     for it in p.get("images") or []:
@@ -106,7 +107,7 @@ def _clean_tourapi(raw: RawRecord, region: Region) -> CleanRecord | str:
         source=raw.source, source_id=raw.source_id,
         source_url=TOUR_DETAIL_URL.format(_s(lst.get("contentid")) or raw.source_id),
         category=category, title=title, addr=addr, lat=lat, lng=lng, geo_status=geo,
-        phone=format_phone(_s(common.get("tel")) or _s(lst.get("tel"))),
+        phone=format_phone(phone),
         homepage=extract_homepage(common.get("homepage") or lst.get("homepage")),
         overview=clean_text(common.get("overview")),
         start_date=start, end_date=end,

@@ -29,22 +29,22 @@ def city_raws_from_fixture(kind: str) -> list[RawRecord]:
     ]
 
 
-def make_tour_raw_126508() -> RawRecord:
-    """Full tourapi.area payload (list + common + intro + images) for contentid 126508."""
-    lst = next(i for i in _items(_load("tourapi/area_12_p1.json")) if i["contentid"] == "126508")
+def make_tour_raw_126833() -> RawRecord:
+    """Full tourapi.area payload (list + common + intro + images) for contentid 126833."""
+    lst = next(i for i in _items(_load("tourapi/area_12_p1.json")) if i["contentid"] == "126833")
     payload = {
         "list": copy.deepcopy(lst),
-        "common": _items(_load("tourapi/detail_common_126508.json"))[0],
-        "intro": _items(_load("tourapi/detail_intro_126508_12.json"))[0],
-        "images": _items(_load("tourapi/detail_image_126508.json")),
+        "common": _items(_load("tourapi/detail_common_126833.json"))[0],
+        "intro": _items(_load("tourapi/detail_intro_126833_12.json"))[0],
+        "images": _items(_load("tourapi/detail_image_126833.json")),
     }
-    return RawRecord(source="tourapi.area", source_id="126508", payload=payload, fetched_at=NOW)
+    return RawRecord(source="tourapi.area", source_id="126833", payload=payload, fetched_at=NOW)
 
 
 def make_tour_raw_hidden() -> RawRecord:
-    lst = make_tour_raw_126508().payload["list"]
+    lst = make_tour_raw_126833().payload["list"]
     lst["showflag"] = "0"
-    return RawRecord(source="tourapi.area", source_id="126508", payload={"list": lst, "hidden": True},
+    return RawRecord(source="tourapi.area", source_id="126833", payload={"list": lst, "hidden": True},
                      fetched_at=NOW)
 
 

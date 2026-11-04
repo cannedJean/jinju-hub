@@ -1,5 +1,4 @@
 {
-  "_handmade": true,
   "response": {
     "header": {
       "resultCode": "0000",
@@ -9,9 +8,9 @@
       "items": {
         "item": [
           {
-            "contentid": "126508",
+            "contentid": "126833",
             "contenttypeid": "12",
-            "heritage1": "1",
+            "heritage1": "0",
             "heritage2": "0",
             "heritage3": "0",
             "infocenter": "055-749-5171",
@@ -21,8 +20,11 @@
             "expagerange": "",
             "accomcount": "",
             "useseason": "",
-            "usetime": "09:00~18:00",
-            "parking": "가능"
+            "usetime": "[하절기(3월~10월)] - 05:00~23:00[동절기(11월~2월)]- 05:00~22:00",
+            "parking": "가능",
+            "chkbabycarriage": "",
+            "chkpet": "",
+            "chkcreditcard": ""
           }
         ]
       },

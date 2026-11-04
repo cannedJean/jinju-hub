@@ -1,0 +1,97 @@
+{
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/59/4062159_image2_1.JPG",
+            "imgname": "경남_진주_진주성_외부_1.JPG",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/59/4062159_image2_1.JPG",
+            "cpyrhtDivCd": "Type1",
+            "serialnum": "4062159_1"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/60/4062160_image2_1.JPG",
+            "imgname": "경남_진주_진주성_외부_2.JPG",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/60/4062160_image2_1.JPG",
+            "cpyrhtDivCd": "Type1",
+            "serialnum": "4062160_2"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/63/4062163_image2_1.JPG",
+            "imgname": "경남_진주_진주성_외부_4.JPG",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/63/4062163_image2_1.JPG",
+            "cpyrhtDivCd": "Type1",
+            "serialnum": "4062163_3"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/62/4062162_image2_1.JPG",
+            "imgname": "경남_진주_진주성_외부_3.JPG",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/62/4062162_image2_1.JPG",
+            "cpyrhtDivCd": "Type1",
+            "serialnum": "4062162_4"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/90/3348490_image2_1.jpg",
+            "imgname": "진주성 (2)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/90/3348490_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348490_5"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/91/3348491_image2_1.jpg",
+            "imgname": "진주성 (1)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/91/3348491_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348491_6"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/89/3348489_image2_1.jpg",
+            "imgname": "진주성 (3)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/89/3348489_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348489_7"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/88/3348488_image2_1.jpg",
+            "imgname": "진주성 (4)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/88/3348488_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348488_8"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/87/3348487_image2_1.jpg",
+            "imgname": "진주성 (5)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/87/3348487_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348487_9"
+          },
+          {
+            "contentid": "126833",
+            "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/86/3348486_image2_1.jpg",
+            "imgname": "진주성 (6)",
+            "smallimageurl": "https://tong.visitkorea.or.kr/cms/resource/86/3348486_image2_1.jpg",
+            "cpyrhtDivCd": "Type3",
+            "serialnum": "3348486_10"
+          }
+        ]
+      },
+      "numOfRows": 10,
+      "pageNo": 1,
+      "totalCount": 15
+    }
+  }
+}
