@@ -26,6 +26,10 @@ GRID = 0.006  # degrees (~550m lat / ~490m lng): a 3x3 neighbourhood covers 500m
 _PREFIXES = ("경상남도", "경남", "진주")
 _SUFFIX = "본점"
 _SC = {"sight", "culture"}
+# Pairs are joined strongest evidence first, so which group a record ends up in does not depend on
+# record keys (ties are broken by the (key_a, key_b) order only within one rank).
+EVIDENCE_RANK = {"same_name": 0, "same_name_addr": 0, "same_phone": 1, "fuzzy_name": 2}
+_NAME_EVIDENCE = {"same_name", "same_name_addr"}
 
 
 @dataclass
@@ -71,11 +75,20 @@ def _digits(p: str | None) -> str:
     return re.sub(r"\D+", "", p or "")
 
 
+def _is_tour(r: CleanRecord) -> bool:
+    return not r.source.startswith(CITY_PREFIX)
+
+
+def _same_tour_source(a: CleanRecord, b: CleanRecord) -> bool:
+    return a.source == b.source and _is_tour(a)
+
+
 def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] = frozenset()) -> str | None:
     """Merge evidence for a pair, or None. Phone evidence needs two different sources and a number
     outside ``shared_phones`` (the city API lists managing-department numbers on many records).
     Fuzzy names are no evidence inside one TourAPI source: its contentids are already distinct contents
-    (e.g. each brand store in a mall: "아디다스 롯데몰 진주점" vs "롯데몰 진주점")."""
+    (e.g. each brand store in a mall: "아디다스 롯데몰 진주점" vs "롯데몰 진주점").
+    The returned reason is the strongest evidence the pair has (see ``EVIDENCE_RANK``)."""
     if _group_of(a.category) != _group_of(b.category):
         return None
     na, nb = normalize_name(a.title), normalize_name(b.title)
@@ -88,13 +101,12 @@ def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] =
     d = haversine_m(a.lat, a.lng, b.lat, b.lng)
     if na and na == nb and d <= SAME_NAME_M:
         return "same_name"
-    ta, tb = unicodedata.normalize("NFKC", a.title), unicodedata.normalize("NFKC", b.title)
-    same_tour_source = a.source == b.source and not a.source.startswith(CITY_PREFIX)
-    if d <= FUZZY_M and not same_tour_source and fuzz.token_set_ratio(ta, tb) >= 90:
-        return "fuzzy_name"
     pa = _digits(a.phone)
     if pa and pa == _digits(b.phone) and a.source != b.source and pa not in shared_phones and d <= PHONE_M:
         return "same_phone"
+    ta, tb = unicodedata.normalize("NFKC", a.title), unicodedata.normalize("NFKC", b.title)
+    if d <= FUZZY_M and not _same_tour_source(a, b) and fuzz.token_set_ratio(ta, tb) >= 90:
+        return "fuzzy_name"
     return None
 
 
@@ -258,26 +270,44 @@ def merge_records(records: list[CleanRecord], overrides: dict, previous: Previou
             splits[idx[a]].add(idx[b])
             splits[idx[b]].add(idx[a])
 
+    def contentid_conflict(small: set[int], other: set[int]) -> bool:
+        """Implicit split: one component never holds two different contentids of one TourAPI source,
+        unless those two records match each other by name (TourAPI occasionally lists a place twice)."""
+        tour_other = [m for m in other if _is_tour(records[m])]
+        for m in small:
+            rm = records[m]
+            if not _is_tour(rm):
+                continue
+            for o in tour_other:
+                ro = records[o]
+                if (ro.source == rm.source and ro.source_id != rm.source_id
+                        and match_reason(rm, ro) not in _NAME_EVIDENCE):
+                    return True
+        return False
+
     def blocked(i: int, j: int) -> bool:
-        if not splits:
-            return False
         ra, rb = uf.find(i), uf.find(j)
         small, other = (ra, rb) if len(uf.members[ra]) <= len(uf.members[rb]) else (rb, ra)
-        om = uf.members[other]
-        return any(splits[m] & om for m in uf.members[small] if m in splits)
+        sm, om = uf.members[small], uf.members[other]
+        if splits and any(splits[m] & om for m in sm if m in splits):
+            return True
+        return contentid_conflict(sm, om)
 
     for a, b in overrides.get("force_merge") or []:
         if a in idx and b in idx and uf.find(idx[a]) != uf.find(idx[b]):
             uf.union(idx[a], idx[b])
             log.append({"a": a, "b": b, "reason": "force_merge", "override": True})
     shared_phones = _shared_phones(records)
+    evidence = []
     for i, j in _candidate_pairs(records):
-        if uf.find(i) == uf.find(j):
-            continue
         reason = match_reason(records[i], records[j], shared_phones)
-        if reason and not blocked(i, j):
+        if reason:
+            evidence.append((EVIDENCE_RANK[reason], records[i].key, records[j].key, i, j, reason))
+    evidence.sort()
+    for _, key_a, key_b, i, j, reason in evidence:
+        if uf.find(i) != uf.find(j) and not blocked(i, j):
             uf.union(i, j)
-            log.append({"a": records[i].key, "b": records[j].key, "reason": reason})
+            log.append({"a": key_a, "b": key_b, "reason": reason})
 
     comps: dict[int, list[CleanRecord]] = defaultdict(list)
     for i, r in enumerate(records):

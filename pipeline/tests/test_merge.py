@@ -195,3 +195,72 @@ def test_fuzzy_name_within_one_tourapi_source_is_not_evidence():
     assert len(M([mall, shop]).places) == 2
     assert match_reason(city("남강 유등 전시관"), tour("남강 유등 전시관 매표소")) == "fuzzy_name"
     assert match_reason(tour("롯데몰 진주점"), tour2("롯데몰 진주점")) == "same_name"
+
+
+def _groups(res):
+    return {frozenset(s.key for s in p.sources): p.id for p in res.places}
+
+
+def _jinjuseong(a_id, b_id):
+    # Real data (K3): city 605 "진주성", city 1163 "진주성 우물" (force_split), TourAPI 126833 "진주성".
+    # "jinju_city.tourinfo:1163" sorts before "...:605", so a key-ordered greedy union joined T to the well.
+    a = city("진주성", id=a_id, lat=35.1897, lng=128.0790)
+    b = city("진주성 우물", id=b_id, lat=35.1899, lng=128.0793)
+    t = tour("진주성", id="126833", lat=35.1898, lng=128.0791)
+    split = {"force_split": [[a.key, b.key]]}
+    return a, b, t, split
+
+
+def test_union_prefers_stronger_evidence_under_split():
+    for a_id, b_id in (("605", "1163"), ("100", "605")):  # both key orders: A after B, A before B
+        a, b, t, split = _jinjuseong(a_id, b_id)
+        groups = set(_groups(M([a, b, t], split)))
+        assert groups == {frozenset({a.key, t.key}), frozenset({b.key})}, (a_id, b_id)
+
+
+def test_merge_result_independent_of_input_order():
+    a, b, t, split = _jinjuseong("605", "1163")
+    recs = [a, b, t,
+            city("남강 유등 전시관", id="7", lat=35.1880, lng=128.0890),
+            tour("남강 유등 전시관 매표소", id="501", lat=35.1881, lng=128.0891),
+            rec("가나식당", 35.19, 128.08, cat="food", phone="055-741-1234", source="jinju_city.restaurant",
+                source_id="r1"),
+            rec("전혀다른이름", 35.192, 128.082, cat="food", phone="0557411234", source="tourapi.area",
+                source_id="t1")]
+    orders = [recs, list(reversed(recs)), [recs[i] for i in (4, 0, 6, 2, 5, 1, 3)]]
+    results = [_groups(M(o, split)) for o in orders]
+    assert results[0] == results[1] == results[2]
+    assert len(results[0]) == 4
+
+
+def test_component_never_holds_two_contentids_of_one_tour_source():
+    # tour A ~ city X ~ tour B by fuzzy names only: A and B are distinct TourAPI contents.
+    x = city("남강 유등 전시관", id="7", lat=35.1880, lng=128.0890)
+    ta = tour("남강 유등 전시관 매표소", id="501", lat=35.1881, lng=128.0891)
+    tb = tour("남강 유등 전시관 주차장", id="502", lat=35.1879, lng=128.0889)
+    res = M([x, ta, tb])
+    assert not any({ta.key, tb.key} <= g for g in _groups(res))
+    assert set(_groups(res)) == {frozenset({x.key, ta.key}), frozenset({tb.key})}  # ties: (key_a, key_b)
+    # the same contentid on another TourAPI source (area + festival) is not a conflict
+    fa = rec("남강 유등 전시관 매표소", 35.1881, 128.0891, source="tourapi.festival", source_id="501")
+    assert {frozenset({x.key, ta.key, fa.key})} <= set(_groups(M([x, ta, tb, fa])))
+    # two contentids with the same name are allowed together (TourAPI lists some places twice)
+    same = [city("진주성", id="605"), tour("진주성", id="126833"), tour2("진주성", id="999")]
+    assert len(M(same).places) == 1
+
+
+def test_implicit_split_checks_every_contentid_already_in_the_component():
+    # A and A' share a name (allowed together); B only fuzzy-matches the city record -> stays apart.
+    x = city("남강 유등 전시관", id="7", lat=35.1880, lng=128.0890)
+    a1 = tour("남강 유등 전시관", id="501", lat=35.1881, lng=128.0891)
+    a2 = tour("남강유등전시관", id="503", lat=35.1880, lng=128.0890)
+    b = tour("남강 유등 전시관 주차장", id="502", lat=35.1879, lng=128.0889)
+    assert set(_groups(M([x, a1, a2, b]))) == {frozenset({x.key, a1.key, a2.key}), frozenset({b.key})}
+
+
+def test_reason_reports_strongest_evidence():
+    # a pair with both a similar name and the same phone is phone evidence (ranked above fuzzy)
+    a = rec("남강 유등 전시관", 35.1880, 128.0890, phone="055-749-1111", source_id="c1")
+    b = rec("남강 유등 전시관 매표소", 35.1881, 128.0891, phone="0557491111", source="tourapi.area",
+            source_id="t1")
+    assert match_reason(a, b) == "same_phone"
