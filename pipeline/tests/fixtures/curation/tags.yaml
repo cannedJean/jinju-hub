@@ -1,0 +1,11 @@
+category_defaults:
+  culture: [indoor]
+  sight: [outdoor]
+  leisure: [outdoor]
+keyword_tags:   # 제목 + 메뉴에서 부분 일치
+  local_food: ["냉면", "비빔밥", "장어", "헛제사밥"]
+  indoor: ["박물관", "전시관", "미술관", "기념관"]
+manual:         # 가장 가까운 일치 장소 1곳에 태그 부여
+  - {match: {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}, tags: [night_view]}
+  - {match: {title_contains: 진주성, near: [35.1893, 128.0807], within_m: 1500}, tags: [night_view]}
+  - {match: {title_contains: 진주교, near: [35.1869, 128.0889], within_m: 1500}, tags: [night_view]}

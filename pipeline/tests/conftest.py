@@ -113,3 +113,20 @@ def tour_raw_hidden():
     from helpers import make_tour_raw_hidden
 
     return make_tour_raw_hidden()
+
+
+@pytest.fixture
+def places_fixture():
+    import json
+
+    from jinju_pipeline.models import Place
+
+    path = Path(__file__).resolve().parent / "fixtures" / "places_small.json"
+    return [Place(**d) for d in json.loads(path.read_text(encoding="utf-8"))]
+
+
+@pytest.fixture
+def cur():
+    from jinju_pipeline.curation import load_curation
+
+    return load_curation(Path(__file__).resolve().parent / "fixtures" / "curation")

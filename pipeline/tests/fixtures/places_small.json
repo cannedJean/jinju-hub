@@ -1,0 +1,139 @@
+[
+ {
+  "id": "jh-0001",
+  "category": "sight",
+  "title": "진주성",
+  "title_norm": "진주성",
+  "geo_status": "ok",
+  "lat": 35.1893,
+  "lng": 128.0807,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시",
+  "summary": "임진왜란 때 진주대첩의 현장"
+ },
+ {
+  "id": "jh-0002",
+  "category": "culture",
+  "title": "촉석루",
+  "title_norm": "촉석루",
+  "geo_status": "ok",
+  "lat": 35.1892,
+  "lng": 128.0816,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0003",
+  "category": "culture",
+  "title": "국립진주박물관",
+  "title_norm": "국립진주박물관",
+  "geo_status": "ok",
+  "lat": 35.1896,
+  "lng": 128.0768,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0004",
+  "category": "food",
+  "title": "하연옥",
+  "title_norm": "하연옥",
+  "geo_status": "ok",
+  "lat": 35.1792,
+  "lng": 128.0862,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시",
+  "menu": "냉면, 육전"
+ },
+ {
+  "id": "jh-0005",
+  "category": "festival",
+  "title": "진주남강유등축제",
+  "title_norm": "진주남강유등축제",
+  "geo_status": "ok",
+  "lat": 35.1875,
+  "lng": 128.083,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시",
+  "start_date": "2026-10-03",
+  "end_date": "2026-10-18",
+  "date_year": 2026
+ },
+ {
+  "id": "jh-0006",
+  "category": "stay",
+  "title": "진주 샘플호텔",
+  "title_norm": "진주샘플호텔",
+  "geo_status": "ok",
+  "lat": 35.185,
+  "lng": 128.09,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0007",
+  "category": "sight",
+  "title": "진주교",
+  "title_norm": "진주교",
+  "geo_status": "ok",
+  "lat": 35.1869,
+  "lng": 128.0889,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0008",
+  "category": "sight",
+  "title": "진양호 전망대",
+  "title_norm": "진양호전망대",
+  "geo_status": "ok",
+  "lat": 35.1596,
+  "lng": 128.0447,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0009",
+  "category": "shopping",
+  "title": "진주 중앙시장",
+  "title_norm": "진주중앙시장",
+  "geo_status": "ok",
+  "lat": 35.193,
+  "lng": 128.091,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0010",
+  "category": "food",
+  "title": "샘플 장어마을",
+  "title_norm": "샘플장어마을",
+  "geo_status": "ok",
+  "lat": 35.188,
+  "lng": 128.095,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0011",
+  "category": "culture",
+  "title": "의기사",
+  "title_norm": "의기사",
+  "geo_status": "ok",
+  "lat": 35.189,
+  "lng": 128.079,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ },
+ {
+  "id": "jh-0012",
+  "category": "leisure",
+  "title": "경남수목원",
+  "title_norm": "경남수목원",
+  "geo_status": "ok",
+  "lat": 35.156,
+  "lng": 128.11,
+  "updated_at": "2026-11-04T03:00:00+09:00",
+  "addr": "경상남도 진주시"
+ }
+]

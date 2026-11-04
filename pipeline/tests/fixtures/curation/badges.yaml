@@ -1,0 +1,7 @@
+items:
+  - {id: first_light, label: 첫 등불, description: 아무 장소에서나 첫 등불을 밝혀 보세요., required: 1, eligible: {kind: any}}
+  - {id: jinju8, label: 진주8경, description: 진주8경을 모두 찾아 등불을 밝히세요., required: 8, eligible: {kind: jinju8}}
+  - {id: food_explorer, label: 맛 탐험가, description: 맛집 3곳에서 등불을 밝히세요., required: 3, eligible: {kind: category, value: food}}
+  - {id: history_walk, label: 역사 산책, description: 문화·역사 명소 3곳에서 등불을 밝히세요., required: 3, eligible: {kind: category, value: culture}}
+  - {id: night_namgang, label: 밤의 남강, description: 남강의 야경 명소 2곳에서 등불을 밝히세요., required: 2, eligible: {kind: tag, value: night_view}}
+  - {id: festival_guest, label: 축제 손님, description: 축제 기간에 축제 장소에서 등불을 밝히세요., required: 1, eligible: {kind: festival}}

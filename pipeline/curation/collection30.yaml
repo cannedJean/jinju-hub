@@ -1,0 +1,11 @@
+# 초안: 진주8경만 포함. 운영 30선은 Task A12에서 사용자와 확정한다.
+# source_keys: 선택. TourAPI/진주시 원천 키("<source>:<source_id>")를 알게 되면 채운다 (러너가 collection_source_keys로 읽음).
+items:
+  - {key: jinju8-1-chokseongnu, label: 진주성 촉석루, match: {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}}
+  - {key: jinju8-2-uiam, label: 남강 의암, match: {title_contains: 의암, near: [35.1887, 128.0822], within_m: 800}}
+  - {key: jinju8-3-dwibyeori, label: 뒤벼리, match: {title_contains: 뒤벼리, near: [35.1855, 128.0955], within_m: 2000}}
+  - {key: jinju8-4-saebyeori, label: 새벼리, match: {title_contains: 새벼리, near: [35.1790, 128.0590], within_m: 2000}}
+  - {key: jinju8-5-bongsudae, label: 망진산 봉수대, match: {title_contains: 봉수대, near: [35.1633, 128.0728], within_m: 2000}}
+  - {key: jinju8-6-bibongsan, label: 비봉산의 봄, match: {title_contains: 비봉산, near: [35.1995, 128.0900], within_m: 2500}}
+  - {key: jinju8-7-wolasan, label: 월아산 해돋이, match: {title_contains: 월아산, near: [35.1500, 128.2050], within_m: 5000}}
+  - {key: jinju8-8-jinyangho, label: 진양호 노을, match: {title_contains: 진양호, near: [35.1590, 128.0450], within_m: 3500}}
