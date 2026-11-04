@@ -1,0 +1,12 @@
+name: reachability
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: jinju.go.kr OpenAPI
+        run: echo "jinju_city=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 'http://www.jinju.go.kr/openapi/tour/tourinfo.do' || echo FAIL)"
+      - name: TourAPI ldongCode2
+        env:
+          KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: echo "tourapi=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -G 'https://apis.data.go.kr/B551011/KorService2/ldongCode2' --data-urlencode "serviceKey=$KEY" -d lDongRegnCd=48 -d lDongListYn=Y -d MobileOS=ETC -d MobileApp=JinjuHub -d _type=json || echo FAIL)"

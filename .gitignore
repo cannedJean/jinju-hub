@@ -1,0 +1,17 @@
+.env
+**/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+frontend/dist/
+pipeline/data/raw/
+pipeline/data/work/
+pipeline/data/state/
+.superpowers/
+*.db-journal
+*.db.tmp
+playwright-report/
+test-results/
+backend/jinjuhub.db
+backend/e2e.db
