@@ -1,12 +1,25 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import AppTabBar from './components/layout/AppTabBar.vue'
 import DemoBanner from './components/layout/DemoBanner.vue'
 import ChatWidget from './components/ChatWidget.vue'
+import CelebrationToast from './components/lanterns/CelebrationToast.vue'
 import { useBreakpoint } from './composables/useBreakpoint'
+import { useCollectionStore } from './stores/collection'
+
+const collection = useCollectionStore()
+// Header progress and badge toasts need the collection definition; a failure just leaves 0/30.
+onMounted(async () => {
+  try {
+    await collection.load()
+    collection.checkBadges()
+  } catch {
+    // retried on the next load (e.g. visiting 내 유등)
+  }
+})
 
 const { isMobile } = useBreakpoint()
 const route = useRoute()
@@ -29,5 +42,6 @@ const demo = ref({ active: false, date: '' })
     <AppFooter v-if="!fullscreen" />
     <AppTabBar v-if="isMobile" />
     <ChatWidget />
+    <CelebrationToast />
   </div>
 </template>

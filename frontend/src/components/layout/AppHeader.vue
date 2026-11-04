@@ -1,14 +1,14 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useCollectionStore } from '../../stores/collection'
 import { useRoute, useRouter } from 'vue-router'
 import WeatherWidget from '../WeatherWidget.vue'
 import { useBreakpoint } from '../../composables/useBreakpoint'
 import { DEFAULT_STATE, parseQuery, searchState, toQuery } from '../../composables/useExploreQuery'
 
-defineProps({
-  lanternCount: { type: Number, default: 0 },
-  lanternTotal: { type: Number, default: 30 },
-})
+const collection = useCollectionStore()
+const progress = computed(() => collection.progress)
+const total = computed(() => collection.collectionIds.length || 30)
 
 const router = useRouter()
 const route = useRoute()
@@ -77,9 +77,14 @@ function submit() {
     <div class="flex items-center gap-3" :class="{ 'ml-auto': isMobile }">
       <WeatherWidget />
       <slot name="lantern-progress">
-        <span class="text-lantern-500 font-bold text-[14px] whitespace-nowrap" aria-label="유등 진행">
-          ◆ {{ lanternCount }}/{{ lanternTotal }}
-        </span>
+        <router-link
+          to="/lanterns"
+          class="text-lantern-500 font-bold text-[14px] whitespace-nowrap"
+          data-test="lantern-progress"
+          :aria-label="`유등 30선 진행도 ${progress}/${total}, 내 유등 보기`"
+        >
+          <span aria-hidden="true">◆ {{ progress }}/{{ total }}</span>
+        </router-link>
       </slot>
     </div>
   </header>
