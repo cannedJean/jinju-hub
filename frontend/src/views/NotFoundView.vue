@@ -17,7 +17,7 @@
         홈으로 가기
       </router-link>
       <router-link
-        to="/places"
+        to="/explore"
         class="px-6 py-3 bg-white border border-border text-strong font-bold rounded-lg hover:bg-page transition-colors"
       >
         지역정보 보기

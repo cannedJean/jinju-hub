@@ -9,8 +9,8 @@ export function getChatSourceRoute(source) {
 
   if (source.type === 'location') {
     return {
-      path: '/places',
-      query: { keyword: String(source.label || '').trim() },
+      path: '/explore',
+      query: { q: String(source.label || '').trim() },
     }
   }
 

@@ -1,16 +1,74 @@
 <script setup>
-// Temporary stub; replaced in C2.
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import WeatherWidget from '../WeatherWidget.vue'
+import { useBreakpoint } from '../../composables/useBreakpoint'
+
+defineProps({
+  lanternCount: { type: Number, default: 0 },
+  lanternTotal: { type: Number, default: 30 },
+})
+
+const router = useRouter()
+const { isMobile } = useBreakpoint()
+const query = ref('')
+
+const NAV = [
+  { to: '/explore', label: '탐색' },
+  { to: '/lanterns', label: '내 유등' },
+  { to: '/festivals', label: '축제' },
+  { to: '/boards', label: '게시판' },
+  { to: '/about/data', label: '데이터 출처' },
+]
+
+function submit() {
+  const q = query.value.trim()
+  router.push(q ? { path: '/explore', query: { q } } : { path: '/explore' })
+}
 </script>
 
 <template>
-  <header class="sticky top-0 z-[60] h-[72px] bg-night-900 flex items-center justify-between px-6 md:px-8">
-    <router-link to="/" class="text-[22px] font-extrabold text-lantern-500 tracking-tight">
-      JinjuHub
+  <header
+    class="sticky top-0 z-[60] bg-night-900 flex items-center gap-4 px-4 md:px-8"
+    :class="isMobile ? 'h-14 justify-between' : 'h-[72px]'"
+  >
+    <router-link
+      to="/"
+      class="text-lantern-500 font-extrabold tracking-tight whitespace-nowrap"
+      :class="isMobile ? 'text-[18px]' : 'text-[22px]'"
+    >
+      JinjuHub<span v-if="!isMobile" class="ml-1.5 text-white/80 font-bold text-[16px]">진주</span>
     </router-link>
-    <nav class="flex items-center gap-6 text-white text-[15px]">
-      <router-link to="/boards">게시판</router-link>
-      <WeatherWidget />
+
+    <form v-if="!isMobile" class="flex-1 max-w-[360px]" role="search" @submit.prevent="submit">
+      <input
+        v-model="query"
+        type="search"
+        placeholder="장소, 음식, 축제 검색"
+        aria-label="장소 검색"
+        class="w-full rounded-full bg-white/10 text-white placeholder-white/50 px-4 py-2 text-[14px] outline-none focus:bg-white/20"
+      />
+    </form>
+
+    <nav v-if="!isMobile" class="flex items-center gap-5 text-white text-[15px] ml-auto" aria-label="주 메뉴">
+      <router-link
+        v-for="item in NAV"
+        :key="item.to"
+        :to="item.to"
+        class="hover:text-lantern-400 whitespace-nowrap"
+        active-class="text-lantern-500 font-bold"
+      >
+        {{ item.label }}
+      </router-link>
     </nav>
+
+    <div class="flex items-center gap-3" :class="{ 'ml-auto': isMobile }">
+      <WeatherWidget />
+      <slot name="lantern-progress">
+        <span class="text-lantern-500 font-bold text-[14px] whitespace-nowrap" aria-label="유등 진행">
+          ◆ {{ lanternCount }}/{{ lanternTotal }}
+        </span>
+      </slot>
+    </div>
   </header>
 </template>
