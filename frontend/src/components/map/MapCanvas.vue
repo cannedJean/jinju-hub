@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import './map.css'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { haversineMeters, boundsToBbox } from '../../utils/geo'
 import { formatDistance } from '../../utils/format'
 import { buildMarkerOptions, makeClusterIcon, makeMarkerIcon, markerState } from './markerIcons'
@@ -24,6 +24,8 @@ const props = defineProps({
   // Pixels at the bottom covered by UI (mobile bottom sheet): fits, bbox and controls avoid it.
   insetBottom: { type: Number, default: 0 },
   dark: { type: Boolean, default: false },
+  // id -> href for the popup's "상세 보기" link (router.resolve in the caller).
+  detailHref: { type: Function, default: null },
 })
 
 const emit = defineEmits(['select', 'moveend', 'pick-base', 'move-virtual', 'toggle-save', 'open'])
@@ -43,6 +45,10 @@ const entries = new Map()
 // fits and pans we make ourselves must not pop the "이 지역 재검색" button.
 let userGesture = false
 
+// Night map: a dedicated dark tile URL when configured, otherwise a CSS filter on the tile pane.
+const tileUrl = (dark) => (dark && TILE_DARK ? TILE_DARK : TILE_LIGHT)
+const filterNight = computed(() => props.dark && !TILE_DARK)
+
 const hasCoords = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng)
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
@@ -58,7 +64,13 @@ function popupFor(entry) {
     distanceText: distance,
     saved: props.savedIds.has(data.id),
     lit: props.litIds.has(data.id),
-    onToggleSave: (id) => emit('toggle-save', id),
+    href: props.detailHref?.(data.id),
+    // Wait for the parent's store update to reach our props, then the popup re-reads it.
+    onToggleSave: async (id) => {
+      emit('toggle-save', id)
+      await nextTick()
+    },
+    getSaved: (id) => props.savedIds.has(id),
     onOpen: (id) => emit('open', id),
   })
 }
@@ -308,11 +320,7 @@ onMounted(() => {
     zoomControl: false,
   })
   L.control.zoom({ position: 'topright', zoomInTitle: '확대', zoomOutTitle: '축소' }).addTo(map)
-  tiles = L.tileLayer(props.dark ? TILE_DARK : TILE_LIGHT, {
-    attribution: ATTRIBUTION,
-    subdomains: 'abcd',
-    maxZoom: 19,
-  }).addTo(map)
+  tiles = L.tileLayer(tileUrl(props.dark), { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map)
 
   cluster = L.markerClusterGroup({
     showCoverageOnHover: false,
@@ -371,7 +379,9 @@ watch(() => props.virtualPos, renderVirtual)
 watch(() => props.fitTo, () => applyFit(true))
 watch(
   () => props.dark,
-  (dark) => tiles?.setUrl(dark ? TILE_DARK : TILE_LIGHT),
+  (dark) => {
+    if (TILE_DARK) tiles?.setUrl(tileUrl(dark))
+  },
 )
 watch(
   () => props.insetBottom,
@@ -384,7 +394,7 @@ watch(
 
 <template>
   <!-- Vue owns the wrapper's classes; Leaflet owns the inner element's (never bind :class on it). -->
-  <div class="jh-map h-full w-full" :class="{ 'is-picking': pickingBase, 'is-dark': dark }">
+  <div class="jh-map h-full w-full" :class="{ 'is-picking': pickingBase, 'is-dark': dark, 'tiles-night': filterNight }">
     <div ref="el" class="h-full w-full" role="region" aria-label="진주 장소 지도"></div>
   </div>
 </template>

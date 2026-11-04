@@ -14,6 +14,11 @@ const props = defineProps({
 })
 const emit = defineEmits(['hover', 'select', 'toggle-save', 'set-base'])
 
+// Focus moving between the card's own buttons keeps the highlight.
+function onFocusOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) emit('hover', null)
+}
+
 const imgFailed = ref(false)
 watch(
   () => props.place.hero_image,
@@ -46,6 +51,8 @@ const saveLabel = computed(() => {
     :data-place-id="place.id"
     @mouseenter="emit('hover', place.id)"
     @mouseleave="emit('hover', null)"
+    @focusin="emit('hover', place.id)"
+    @focusout="onFocusOut"
     @click="emit('select', place.id)"
   >
     <div class="place-card__thumb" :class="`thumb--${place.category}`">

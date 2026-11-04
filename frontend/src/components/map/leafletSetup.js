@@ -4,6 +4,7 @@ import L from 'leaflet'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+import { JINJU_MAX_BOUNDS } from '../../utils/geo'
 
 if (typeof window !== 'undefined' && !window.L) window.L = L
 
@@ -16,17 +17,13 @@ L.Icon.Default.mergeOptions({
 })
 
 export const MAP_CENTER = [35.18, 128.108]
-// Jinju region bbox (lat 35.05~35.33, lng 127.93~128.30) + 0.05° margin.
-export const MAX_BOUNDS = [
-  [35.0, 127.88],
-  [35.38, 128.35],
-]
-export const TILE_LIGHT =
-  import.meta.env.VITE_TILE_URL || 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-export const TILE_DARK =
-  import.meta.env.VITE_TILE_URL_DARK || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+export const MAX_BOUNDS = JINJU_MAX_BOUNDS
+// CARTO raster basemaps now answer with an "API KEY REQUIRED" tile, so OSM is the default.
+// Either URL can be replaced via env; without a dark URL the night map is a CSS filter on the tiles.
+export const TILE_LIGHT = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+export const TILE_DARK = import.meta.env.VITE_TILE_URL_DARK || null
 export const ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors ' +
-  '&copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · 한국관광공사 TourAPI · 진주시 공공데이터'
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' +
+  ' · 한국관광공사 TourAPI · 진주시'
 
 export default L

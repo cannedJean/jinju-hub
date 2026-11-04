@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MapCanvas from '../components/map/MapCanvas.vue'
-import { MAX_BOUNDS } from '../components/map/leafletSetup'
 import CategoryChips from '../components/explore/CategoryChips.vue'
 import PlaceList from '../components/explore/PlaceList.vue'
 import BottomSheet from '../components/explore/BottomSheet.vue'
@@ -11,14 +10,14 @@ import ResearchButton from '../components/explore/ResearchButton.vue'
 import { fetchPlace, fetchPlaces } from '../api/places'
 import { fetchWeather } from '../api/weather'
 import { useBreakpoint } from '../composables/useBreakpoint'
+import { useBasePoint } from '../composables/useBasePoint'
 import { searchState, toApiParams, toQuery, useExploreQuery } from '../composables/useExploreQuery'
 import { useLanternsStore } from '../stores/lanterns'
-import { useMarkersStore } from '../stores/markers'
+import { mergeUserMarkers, useMarkersStore } from '../stores/markers'
 import { bboxToPoints, haversineMeters, radiusFitPoints } from '../utils/geo'
-import { formatDistance, formatRadius } from '../utils/format'
+import { formatRadius } from '../utils/format'
 
 const SHEET_COLLAPSED_PX = 96
-const DEFAULT_RADIUS = 1000
 const DEMO_START = { lat: 35.1897, lng: 128.0819 } // 촉석루
 const MAP_DARK_KEY = 'jinjuhub.mapDark'
 
@@ -123,7 +122,8 @@ watch(
 // ---------- markers ----------
 // Browsing: every place (clustered), filtered by category chips and the lodging radius.
 // Searching (keyword / tag filter): only the current result page, so pins match the list.
-const mapMarkers = computed(() => {
+// Either way the user's saved/lit places stay visible (separate, unclustered layer).
+const filteredMarkers = computed(() => {
   if (searchMode.value) {
     return result.value.items.filter(hasCoords).map((p) => ({
       id: p.id,
@@ -139,114 +139,36 @@ const mapMarkers = computed(() => {
   if (near && radius) list = list.filter((m) => haversineMeters(near, m) <= radius)
   return list
 })
+const mapMarkers = computed(() => mergeUserMarkers(filteredMarkers.value, lanterns.items, markersStore.byId))
 
 const savedIds = computed(() => new Set(Object.keys(lanterns.items)))
 const litIds = computed(() => new Set(Object.keys(lanterns.items).filter((id) => lanterns.items[id]?.litAt)))
 
-// ---------- lodging / reference point ----------
-const sameSpot = (a, b) => hasCoords(a) && hasCoords(b) && haversineMeters(a, b) < 5
-const refPoint = computed(() => {
-  const near = state.value.near
-  const base = lanterns.base
-  if (near) return { lat: near.lat, lng: near.lng, label: sameSpot(base, near) ? base.label : '기준점' }
-  return hasCoords(base) ? { lat: base.lat, lng: base.lng, label: base.label } : null
+// ---------- lodging / reference point (useBasePoint) ----------
+const basePoint = useBasePoint({
+  state,
+  update,
+  onBaseSet: (base) => showToast(`🏠 ‘${base.label}’ 기준으로 볼게요`),
 })
-const activeRadius = computed(() => (state.value.near && state.value.radius ? state.value.radius : null))
-
-const picking = ref(false)
-const locating = ref(false)
-const baseMessage = ref('')
-
-function inRegion({ lat, lng }) {
-  const [[s, w], [n, e]] = MAX_BOUNDS
-  return lat >= s && lat <= n && lng >= w && lng <= e
-}
-
-function setBase(point, note = '') {
-  picking.value = false
-  baseMessage.value = note
-  const base = { lat: point.lat, lng: point.lng, label: point.label || '내 숙소' }
-  lanterns.setBase(base)
-  update({
-    near: { lat: base.lat, lng: base.lng },
-    radius: state.value.radius || DEFAULT_RADIUS,
-    sort: 'distance',
-    bbox: null,
-  })
-  showToast(`🏠 ‘${base.label}’ 기준으로 볼게요`)
-}
-
-function setRadius(radius) {
-  if (!refPoint.value) return
-  if (!radius) {
-    update({ near: null, radius: null })
-    return
-  }
-  update({ near: { lat: refPoint.value.lat, lng: refPoint.value.lng }, radius, sort: 'distance', bbox: null })
-}
-
-function clearBase() {
-  baseMessage.value = ''
-  const near = state.value.near
-  if (lanterns.base && (!near || sameSpot(lanterns.base, near))) lanterns.setBase(null)
-  update({ near: null, radius: null, sort: state.value.sort === 'distance' ? 'relevance' : state.value.sort })
-}
+const { refPoint, activeRadius, picking, locating, message: baseMessage } = basePoint
 
 function startPicking() {
-  baseMessage.value = ''
-  picking.value = true
+  basePoint.startPicking()
   mapRef.value?.closePopup()
   if (isMobile.value) sheetSnap.value = 'collapsed'
 }
 
-function onPickBase(point) {
-  if (!inRegion(point)) return
-  setBase({ ...point, label: '지도에서 고른 위치' })
+// Marker failures leave an empty map: say so and offer a retry (the list retry does both).
+function loadMarkers() {
+  return markersStore.load().catch(() => {})
 }
-
-function locate() {
-  baseMessage.value = ''
-  if (lanterns.demo.enabled && hasCoords(lanterns.demo.pos)) {
-    setBase({ ...lanterns.demo.pos, label: '가상 내 위치' })
-    return
-  }
-  if (!('geolocation' in navigator)) {
-    baseMessage.value = '이 브라우저는 위치 기능을 지원하지 않아요. 지도에서 직접 찍어 주세요.'
-    return
-  }
-  locating.value = true
-  navigator.geolocation.getCurrentPosition(
-    ({ coords }) => {
-      locating.value = false
-      const point = { lat: coords.latitude, lng: coords.longitude }
-      if (!inRegion(point)) {
-        baseMessage.value = '현재 위치가 진주 밖이에요. 지도에서 숙소 위치를 찍어 주세요.'
-        return
-      }
-      const note =
-        coords.accuracy > 200
-          ? `위치 정확도가 낮아요(±${formatDistance(coords.accuracy)}). 필요하면 지도에서 다시 찍어 주세요.`
-          : ''
-      setBase({ ...point, label: '현재 위치' }, note)
-    },
-    (err) => {
-      locating.value = false
-      baseMessage.value =
-        err?.code === 1
-          ? '위치 권한이 거부되었어요. 지도에서 직접 찍어 주세요.'
-          : '현재 위치를 확인하지 못했어요. 지도에서 직접 찍어 주세요.'
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-  )
-}
-
-function onSetBaseFromPlace(place) {
-  if (!hasCoords(place)) return
-  setBase({ lat: place.lat, lng: place.lng, label: place.title })
+function retryAll() {
+  if (listError.value || !loadedOnce.value) loadList()
+  if (markersStore.error) loadMarkers()
 }
 
 function onKeydown(event) {
-  if (event.key === 'Escape' && picking.value) picking.value = false
+  if (event.key === 'Escape' && picking.value) basePoint.cancelPicking()
 }
 
 // ---------- map viewport: fits and "이 지역 재검색" ----------
@@ -286,6 +208,8 @@ const previewDistance = computed(() =>
 function onMarkerSelect(id) {
   selectedId.value = id
 }
+
+const detailHref = (id) => router.resolve({ name: 'place', params: { id } }).href
 
 function openDetail(id) {
   router.push({ name: 'place', params: { id } })
@@ -419,7 +343,7 @@ function toggleMapDark() {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', onResize)
-  markersStore.load().catch(() => {})
+  loadMarkers()
   if (state.value.bbox && !activeRadius.value) fitTo.value = bboxToPoints(state.value.bbox)
   fetchWeather()
     .then((w) => {
@@ -489,10 +413,10 @@ onBeforeUnmount(() => {
           :locating="locating"
           :message="baseMessage"
           @pick="startPicking"
-          @cancel-pick="picking = false"
-          @locate="locate"
-          @update:radius="setRadius"
-          @clear="clearBase"
+          @cancel-pick="basePoint.cancelPicking"
+          @locate="basePoint.locate"
+          @update:radius="basePoint.setRadius"
+          @clear="basePoint.clearBase"
         />
       </div>
 
@@ -514,9 +438,9 @@ onBeforeUnmount(() => {
           @hover="hoverId = $event"
           @select="onCardSelect"
           @toggle-save="toggleSave"
-          @set-base="onSetBaseFromPlace"
+          @set-base="basePoint.setFromPlace"
           @update:page="setPage"
-          @retry="loadList"
+          @retry="retryAll"
           @reset="resetFilters"
         />
       </div>
@@ -537,13 +461,31 @@ onBeforeUnmount(() => {
         :virtual-pos="virtualPos"
         :inset-bottom="insetBottom"
         :dark="mapDark"
+        :detail-href="detailHref"
         @select="onMarkerSelect"
         @moveend="onMoveEnd"
-        @pick-base="onPickBase"
+        @pick-base="basePoint.pickAt"
         @move-virtual="onMoveVirtual"
         @toggle-save="toggleSave"
         @open="openDetail"
       />
+
+      <div
+        v-if="markersStore.error"
+        data-test="markers-error"
+        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[3] w-[calc(100%-32px)] max-w-[320px] rounded-2xl bg-surface shadow-xl border border-border p-4 text-center"
+        role="alert"
+      >
+        <p class="text-[15px] font-extrabold text-strong">지도에 장소를 표시하지 못했어요.</p>
+        <p class="mt-1 text-[13px] text-muted">네트워크 상태를 확인한 뒤 다시 시도해 주세요.</p>
+        <button
+          type="button"
+          class="mt-3 h-9 px-4 rounded-lg bg-night-900 text-white text-[14px] font-bold"
+          @click="retryAll"
+        >
+          다시 시도
+        </button>
+      </div>
 
       <!-- Top overlay: chips (mobile), re-search, picking hint -->
       <div class="absolute inset-x-0 top-0 z-[3] pointer-events-none flex flex-col items-center gap-2 p-2 md:p-3">
@@ -564,7 +506,7 @@ onBeforeUnmount(() => {
           role="status"
         >
           📍 지도를 눌러 숙소 위치를 골라 주세요
-          <button type="button" class="rounded-full bg-white/15 hover:bg-white/25 px-3 py-1" @click="picking = false">
+          <button type="button" class="rounded-full bg-white/15 hover:bg-white/25 px-3 py-1" @click="basePoint.cancelPicking">
             취소
           </button>
         </div>
@@ -642,10 +584,10 @@ onBeforeUnmount(() => {
             :locating="locating"
             :message="baseMessage"
             @pick="startPicking"
-            @cancel-pick="picking = false"
-            @locate="locate"
-            @update:radius="setRadius"
-            @clear="clearBase"
+            @cancel-pick="basePoint.cancelPicking"
+            @locate="basePoint.locate"
+            @update:radius="basePoint.setRadius"
+            @clear="basePoint.clearBase"
           />
           <div class="flex items-center gap-2">
             <button v-if="state.bbox" type="button" class="filter-pill" @click="update({ bbox: null })">
@@ -678,9 +620,9 @@ onBeforeUnmount(() => {
           :has-filters="hasFilters"
           @select="onCardSelect"
           @toggle-save="toggleSave"
-          @set-base="onSetBaseFromPlace"
+          @set-base="basePoint.setFromPlace"
           @update:page="setPage"
-          @retry="loadList"
+          @retry="retryAll"
           @reset="resetFilters"
         />
       </BottomSheet>

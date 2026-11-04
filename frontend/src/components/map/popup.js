@@ -2,9 +2,14 @@ import { categoryLabel } from '../../utils/format'
 import { safeCategory } from './markerIcons'
 
 // Marker popup built from DOM nodes with textContent only, so place data can never inject HTML.
-// { distanceText, saved, lit, onToggleSave(id), onOpen(id) }. A lit place cannot be un-saved here
-// (that would erase its check-in), so its button is a static badge.
-export function buildPopup(marker, { distanceText = '', saved = false, lit = false, onToggleSave, onOpen } = {}) {
+// { distanceText, saved, lit, href, onToggleSave(id), getSaved(id), onOpen(id) }.
+// After a toggle the button re-reads the real state via getSaved (onToggleSave may return a promise),
+// so it never shows a save that did not happen. A lit place cannot be un-saved here (that would erase
+// its check-in), so its button is a static badge.
+export function buildPopup(
+  marker,
+  { distanceText = '', saved = false, lit = false, href, onToggleSave, getSaved, onOpen } = {},
+) {
   const el = (tag, className, text) => {
     const node = document.createElement(tag)
     if (className) node.className = className
@@ -24,7 +29,7 @@ export function buildPopup(marker, { distanceText = '', saved = false, lit = fal
 
   const actions = el('div', 'map-popup__actions')
   const link = el('a', 'map-popup__link', '상세 보기')
-  link.href = `/places/${encodeURIComponent(marker.id)}`
+  link.href = href || `/places/${encodeURIComponent(marker.id)}`
   link.addEventListener('click', (event) => {
     if (!onOpen || event.ctrlKey || event.metaKey || event.shiftKey) return
     event.preventDefault()
@@ -50,10 +55,15 @@ export function buildPopup(marker, { distanceText = '', saved = false, lit = fal
     btn.classList.toggle('is-saved', isSaved)
   }
   render()
-  btn.addEventListener('click', () => {
-    isSaved = !isSaved
-    render()
-    onToggleSave?.(marker.id)
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    try {
+      await onToggleSave?.(marker.id)
+    } finally {
+      isSaved = getSaved ? !!getSaved(marker.id) : !isSaved
+      btn.disabled = false
+      render()
+    }
   })
   actions.appendChild(btn)
   wrap.appendChild(actions)

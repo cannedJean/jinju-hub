@@ -35,3 +35,14 @@ export function bboxToPoints(bbox) {
     { lat: maxLat, lng: maxLng },
   ]
 }
+
+// Jinju region bbox (lat 35.05~35.33, lng 127.93~128.30) + 0.05 deg margin, as Leaflet [[S, W], [N, E]].
+export const JINJU_MAX_BOUNDS = [
+  [35.0, 127.88],
+  [35.38, 128.35],
+]
+
+export function inJinjuBounds({ lat, lng }) {
+  const [[s, w], [n, e]] = JINJU_MAX_BOUNDS
+  return lat >= s && lat <= n && lng >= w && lng <= e
+}

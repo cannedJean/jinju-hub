@@ -13,15 +13,34 @@ describe('buildPopup', () => {
     expect(el.querySelector('a').getAttribute('href')).toBe('/places/jh-1')
   })
 
-  test('save button toggles label and calls back', () => {
-    const onToggleSave = vi.fn()
-    const el = buildPopup(M, { saved: false, onToggleSave })
+  test('save button calls back, then shows the state the store actually has', async () => {
+    let stored = false
+    const onToggleSave = vi.fn(() => {
+      stored = true
+    })
+    const el = buildPopup(M, { saved: false, onToggleSave, getSaved: () => stored })
     const btn = el.querySelector('button')
     expect(btn.getAttribute('aria-pressed')).toBe('false')
     btn.click()
+    await Promise.resolve()
+    await Promise.resolve()
     expect(onToggleSave).toHaveBeenCalledWith('jh-1')
     expect(btn.getAttribute('aria-pressed')).toBe('true')
     expect(btn.textContent).toContain('담음')
+  })
+
+  test('save button does not pretend success when the store did not change', async () => {
+    const el = buildPopup(M, { saved: false, onToggleSave: () => Promise.resolve(), getSaved: () => false })
+    const btn = el.querySelector('button')
+    btn.click()
+    await new Promise((r) => setTimeout(r))
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    expect(btn.textContent).toContain('담기')
+  })
+
+  test('uses the detail href supplied by the caller', () => {
+    const el = buildPopup(M, { href: '/app/places/jh-1' })
+    expect(el.querySelector('a').getAttribute('href')).toBe('/app/places/jh-1')
   })
 
   test('detail link calls onOpen instead of navigating', () => {

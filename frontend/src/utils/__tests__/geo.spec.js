@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { bboxToPoints, boundsToBbox, haversineMeters, radiusFitPoints } from '../geo'
+import { JINJU_MAX_BOUNDS, bboxToPoints, boundsToBbox, haversineMeters, inJinjuBounds, radiusFitPoints } from '../geo'
 
 describe('geo', () => {
   test('haversine 진주성↔촉석루 < 400m', () =>
@@ -28,5 +28,18 @@ describe('fit helpers', () => {
       { lat: 35.21, lng: 128.12 },
     ])
     expect(bboxToPoints(null)).toBeNull()
+  })
+})
+
+describe('Jinju bounds', () => {
+  test('max bounds are the region bbox + 0.05 degrees', () => {
+    expect(JINJU_MAX_BOUNDS).toEqual([
+      [35.0, 127.88],
+      [35.38, 128.35],
+    ])
+  })
+  test('inJinjuBounds', () => {
+    expect(inJinjuBounds({ lat: 35.18, lng: 128.108 })).toBe(true)
+    expect(inJinjuBounds({ lat: 37.5, lng: 127.0 })).toBe(false)
   })
 })

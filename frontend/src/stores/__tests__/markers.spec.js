@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { useMarkersStore } from '../markers'
+import { mergeUserMarkers, useMarkersStore } from '../markers'
 import * as placesApi from '../../api/places'
 
 vi.mock('../../api/places', () => ({ fetchMarkers: vi.fn() }))
@@ -38,5 +38,30 @@ describe('markers store', () => {
     await s.load()
     expect(s.error).toBe(false)
     expect(s.items).toHaveLength(3)
+  })
+})
+
+describe('mergeUserMarkers', () => {
+  const byId = new Map(DATA.map((m) => [m.id, m]))
+
+  test('adds saved/lit places missing from the filtered set, without duplicates', () => {
+    const items = {
+      a: { id: 'a', title: 'A', category: 'food', lat: 35.19, lng: 128.08 },
+      c: { id: 'c', title: 'C*', category: 'stay', lat: 1, lng: 1, litAt: '2026-11-04T00:00:00Z' },
+    }
+    const out = mergeUserMarkers([DATA[0]], items, byId)
+    expect(out.map((m) => m.id)).toEqual(['a', 'c'])
+    // Prefers the live marker data over the stored snapshot.
+    expect(out[1]).toEqual(DATA[2])
+  })
+
+  test('falls back to the stored snapshot and skips entries without coordinates', () => {
+    const items = {
+      z: { id: 'z', title: '사라진 곳', category: 'sight', lat: 35.2, lng: 128.1 },
+      n: { id: 'n', title: '좌표 없음', category: 'sight', lat: null, lng: null },
+    }
+    expect(mergeUserMarkers([], items, new Map())).toEqual([
+      { id: 'z', title: '사라진 곳', category: 'sight', lat: 35.2, lng: 128.1, is_collection: false },
+    ])
   })
 })

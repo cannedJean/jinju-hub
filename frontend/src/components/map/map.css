@@ -14,6 +14,10 @@
 .jh-map.is-dark .leaflet-container {
   background: #0b1020;
 }
+/* Night map without a dark tile provider: invert the light tiles (markers/popups are not affected). */
+.jh-map.tiles-night .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
+}
 
 /* Keep bottom controls (zoom, attribution) above the mobile bottom sheet. */
 .jh-map .leaflet-bottom {
