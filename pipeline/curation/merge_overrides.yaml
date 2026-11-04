@@ -1,2 +1,8 @@
+# 병합 예외 — "<source>:<source_id>" 쌍. force_split이 자동 매칭보다 우선한다.
+# 2026-11-04 첫 실데이터 검토: token_set_ratio가 "짧은 이름 ⊂ 긴 이름"이면 100이 되어
+# 서로 다른 진주시 관광지 목록이 합쳐지는 경우를 분리한다.
 force_merge: []
-force_split: []
+force_split:
+  - [jinju_city.tourinfo:605, jinju_city.tourinfo:1163]   # 진주성 ↔ 진주성 우물
+  - [jinju_city.tourinfo:402, jinju_city.tourinfo:626]    # 진양호 ↔ 제8경 진양호 노을
+  - [jinju_city.tourinfo:94, jinju_city.tourinfo:623]     # 망진산 ↔ 제5경 망진산 봉수대

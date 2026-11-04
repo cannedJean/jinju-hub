@@ -37,8 +37,25 @@ def test_match_fuzzy():
 
 def test_same_phone():
     a = rec("가나식당", 35.19, 128.08, cat="food", phone="055-741-1234")
-    b = rec("전혀다른이름", 35.192, 128.082, cat="food", phone="0557411234")
+    b = rec("전혀다른이름", 35.192, 128.082, cat="food", phone="0557411234", source="tourapi.area")
     assert match_reason(a, b) == "same_phone"
+
+
+def test_same_phone_within_one_source_is_not_evidence():
+    # Jinju city lists the managing department's number (e.g. 석갑산/숙호산 share 055-749-5561).
+    a = rec("석갑산", 35.19, 128.08, phone="055-749-5561")
+    b = rec("숙호산", 35.192, 128.082, phone="055-749-5561")
+    assert match_reason(a, b) is None
+
+
+def test_shared_department_phone_does_not_chain_merges():
+    # 055-749-5312 is shared by ~580 heritage/tourinfo records in the real data.
+    recs = [rec(f"비석{i}", 35.19 + i * 0.002, 128.08, cat="culture", phone="055-749-5312",
+                source="jinju_city.heritage", source_id=f"h{i}") for i in range(3)]
+    recs.append(rec("다른이름 정자", 35.19, 128.08, cat="sight", phone="055-749-5312",
+                    source="tourapi.area", source_id="t1"))
+    assert match_reason(recs[0], recs[3], shared_phones=frozenset({"0557495312"})) is None
+    assert len(M(recs).places) == 4
 
 
 def test_no_coords_same_name_addr():
@@ -124,3 +141,13 @@ def test_load_overrides(tmp_path):
 def test_scales_to_1500_records():
     recs = [rec(f"장소{i}", 35.1 + (i % 50) * 0.004, 128.0 + (i // 50) * 0.004, source_id=str(i)) for i in range(1500)]
     assert len(M(recs).places) == 1500
+
+
+def test_city_tourism_listing_names_a_merged_temple():
+    # Real data: 청곡사 (tourinfo) absorbs several heritage artifacts housed there; the place keeps the
+    # tourism listing's name and category rather than an artifact's.
+    temple = rec("청곡사", 35.19, 128.08, cat="sight", source="jinju_city.tourinfo", source_id="493")
+    art = rec("진주 청곡사 대웅전(晉州 靑谷寺大雄殿)", 35.1901, 128.0801, cat="culture",
+              source="jinju_city.heritage", source_id="500")
+    p = M([art, temple]).places[0]
+    assert p.title == "청곡사" and p.category == "sight" and len(p.sources) == 2

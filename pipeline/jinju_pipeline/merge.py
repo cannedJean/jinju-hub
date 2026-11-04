@@ -5,7 +5,7 @@ import hashlib
 import math
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +21,7 @@ FIELD_PRIORITY = {
     "start_date/end_date": "CITY>tourapi.festival>tourapi.area",
 }
 SAME_NAME_M, FUZZY_M, PHONE_M = 300.0, 150.0, 500.0
+SHARED_PHONE_MIN = 3  # a number on this many records is a department/office line, not a place
 GRID = 0.006  # degrees (~550m lat / ~490m lng): a 3x3 neighbourhood covers 500m
 _PREFIXES = ("경상남도", "경남", "진주")
 _SUFFIX = "본점"
@@ -70,7 +71,9 @@ def _digits(p: str | None) -> str:
     return re.sub(r"\D+", "", p or "")
 
 
-def match_reason(a: CleanRecord, b: CleanRecord) -> str | None:
+def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] = frozenset()) -> str | None:
+    """Merge evidence for a pair, or None. Phone evidence needs two different sources and a number
+    outside ``shared_phones`` (the city API lists managing-department numbers on many records)."""
     if _group_of(a.category) != _group_of(b.category):
         return None
     na, nb = normalize_name(a.title), normalize_name(b.title)
@@ -87,7 +90,7 @@ def match_reason(a: CleanRecord, b: CleanRecord) -> str | None:
     if d <= FUZZY_M and fuzz.token_set_ratio(ta, tb) >= 90:
         return "fuzzy_name"
     pa = _digits(a.phone)
-    if pa and pa == _digits(b.phone) and d <= PHONE_M:
+    if pa and pa == _digits(b.phone) and a.source != b.source and pa not in shared_phones and d <= PHONE_M:
         return "same_phone"
     return None
 
@@ -150,10 +153,16 @@ class _UF:
         self.members[ra] |= self.members.pop(rb)
 
 
+# Among city sources the tourism listings name a merged place; heritage rows (artifacts housed at a
+# temple, steles inside 진주성) only contribute fields when the listing lacks them.
+_CITY_ORDER = {"jinju_city.tourinfo": 0, "jinju_city.festival": 1, "jinju_city.restaurant": 2,
+               "jinju_city.lodging": 3, "jinju_city.heritage": 4}
+
+
 def _rank(r: CleanRecord) -> tuple:
     if r.source.startswith(CITY_PREFIX):
-        return (0, r.source, r.source_id)
-    return ({"tourapi.area": 1, "tourapi.festival": 2}.get(r.source, 3), r.source, r.source_id)
+        return (0, _CITY_ORDER.get(r.source, 5), r.source, r.source_id)
+    return ({"tourapi.area": 1, "tourapi.festival": 2}.get(r.source, 3), 0, r.source, r.source_id)
 
 
 def _date_rank(r: CleanRecord) -> tuple:
@@ -246,10 +255,12 @@ def merge_records(records: list[CleanRecord], overrides: dict, previous: Previou
         if a in idx and b in idx and uf.find(idx[a]) != uf.find(idx[b]):
             uf.union(idx[a], idx[b])
             log.append({"a": a, "b": b, "reason": "force_merge", "override": True})
+    phone_counts = Counter(d for d in (_digits(r.phone) for r in records) if d)
+    shared_phones = frozenset(p for p, n in phone_counts.items() if n >= SHARED_PHONE_MIN)
     for i, j in _candidate_pairs(records):
         if uf.find(i) == uf.find(j):
             continue
-        reason = match_reason(records[i], records[j])
+        reason = match_reason(records[i], records[j], shared_phones)
         if reason and not blocked(i, j):
             uf.union(i, j)
             log.append({"a": records[i].key, "b": records[j].key, "reason": reason})

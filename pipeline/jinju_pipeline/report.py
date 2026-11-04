@@ -18,8 +18,11 @@ __all__ = ["GateResult", "build_report", "evaluate_gate", "write_report"]
 
 COMPLETENESS_FIELDS = ("hero_image", "overview", "phone", "hours")
 REQUIRED_CATEGORIES = ("sight", "food", "festival")
-COORDS_GATED = ("sight", "culture", "stay")
-COORDS_MIN = 0.85
+# Spec §5.7 starts at 0.85 for sight/culture/stay and lets the builder adjust after the first real run.
+# 2026-11-04 first run (Jinju city API only, no TourAPI key): sight 0.98, culture 0.65, stay 0.48 —
+# heritage lists many tombs/steles and lodging many motels without coordinates. culture/stay are set as
+# regression guards about 10 points below that run (see DATA.md); revisit once TourAPI is collected.
+COORDS_MIN_BY_CATEGORY = {"sight": 0.85, "culture": 0.55, "stay": 0.40}
 DROP_FLOOR = 0.8
 
 
@@ -79,6 +82,7 @@ def build_report(
         "category_counts": {c: len(v) for c, v in by_cat.items()},
         "completeness": completeness,
         "coords_by_category": {c: _ratio(sum(_has_coords(p) for p in v), len(v)) for c, v in by_cat.items()},
+        "coords_thresholds": dict(COORDS_MIN_BY_CATEGORY),
         "festival_years": dict(sorted(years.items())),
         "detail_pending": pending,
         "quota_used": ledger.used_this_run(),
@@ -111,12 +115,12 @@ def evaluate_gate(report: dict, previous: PreviousSnapshot | None, *, min_first_
         if counts.get(cat, 0) < 1:
             failures.append(f"category {cat} has no places")
 
-    for cat in COORDS_GATED:
+    for cat, minimum in COORDS_MIN_BY_CATEGORY.items():
         ratio = report["coords_by_category"].get(cat, 0.0)
         if counts.get(cat, 0) == 0:
             warnings.append(f"category {cat} has no records; coords ratio not checked")
-        elif ratio < COORDS_MIN:
-            failures.append(f"coords ratio for {cat} {ratio:.2f} < {COORDS_MIN}")
+        elif ratio < minimum:
+            failures.append(f"coords ratio for {cat} {ratio:.2f} < {minimum}")
 
     if report["out_of_bbox_final"] != 0:
         failures.append(f"out_of_bbox_final = {report['out_of_bbox_final']}")
@@ -179,5 +183,8 @@ def write_report(report: dict, gate: GateResult, json_path: Path, md_path: Path)
         md += ["## 미해결 큐레이션 / Unresolved curation", ""]
         md += [f"- {u}" for u in report["unresolved_curation"] + report.get("unresolved_tags", [])] + [""]
     md += ["## 게이트 / Gate", "", f"**{'PASS' if gate.passed else 'FAIL'}**", ""]
+    thresholds = report.get("coords_thresholds") or COORDS_MIN_BY_CATEGORY
+    md += ["- 좌표 보유율 기준(첫 실데이터 후 조정, DATA.md 참조): "
+           + ", ".join(f"{c} ≥ {v:.2f}" for c, v in thresholds.items()), ""]
     md += [f"- FAIL: {f}" for f in gate.failures] + [f"- WARN: {w}" for w in gate.warnings]
     md_path.write_text("\n".join(md) + "\n", encoding="utf-8")

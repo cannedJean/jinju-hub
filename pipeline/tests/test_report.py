@@ -144,3 +144,19 @@ def test_report_md_contains_tables(tmp_path):
         md = (tmp_path / "r.md").read_text(encoding="utf-8")
         assert "| source |" in md and word in md
     assert '"run_id": "run1"' in (tmp_path / "r.json").read_text(encoding="utf-8")
+
+
+def test_coords_thresholds_per_category(tmp_path):
+    # Adjusted after the first real run (2026-11-04, city API only): culture 0.55, stay 0.40.
+    places = _healthy_places() + [_place(4, "culture"), _place(5, "stay")]
+    rep = _build(places)
+    assert rep["coords_thresholds"] == {"sight": 0.85, "culture": 0.55, "stay": 0.40}
+    rep["coords_by_category"].update(culture=0.60, stay=0.45)
+    assert evaluate_gate(rep, _prev(5)).passed
+    rep["coords_by_category"].update(culture=0.50, stay=0.35)
+    g = evaluate_gate(rep, _prev(5))
+    assert not g.passed
+    assert any("culture" in f and "0.55" in f for f in g.failures)
+    assert any("stay" in f and "0.4" in f for f in g.failures)
+    write_report(rep, g, tmp_path / "r.json", tmp_path / "r.md")
+    assert "culture ≥ 0.55" in (tmp_path / "r.md").read_text(encoding="utf-8")
