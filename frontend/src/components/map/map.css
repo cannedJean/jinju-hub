@@ -1,0 +1,391 @@
+/* Explore map: markers, lantern icons, clusters, popups. Colors come from tokens.css. */
+
+/* Own stacking context so Leaflet's internal z-indexes (400-1000) stay below page overlays. */
+.jh-map {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.jh-map .leaflet-container {
+  font-family: inherit;
+  background: #e8eef5;
+}
+.jh-map.is-dark .leaflet-container {
+  background: #0b1020;
+}
+
+/* Keep bottom controls (zoom, attribution) above the mobile bottom sheet. */
+.jh-map .leaflet-bottom {
+  bottom: var(--map-inset-bottom, 0px);
+  transition: bottom 0.28s ease;
+}
+.jh-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgb(255 255 255 / 0.85);
+}
+/* Zoom buttons sit under the page's night-map toggle (top-right); phones pinch instead. */
+.jh-map .leaflet-top.leaflet-right {
+  top: 48px;
+}
+@media (max-width: 767px) {
+  .jh-map .leaflet-control-zoom {
+    display: none;
+  }
+}
+
+/* Picking the lodging point: crosshair, markers stop catching clicks. */
+.jh-map.is-picking .leaflet-container,
+.jh-map.is-picking .leaflet-grab,
+.jh-map.is-picking .leaflet-interactive {
+  cursor: crosshair !important;
+}
+.jh-map.is-picking .leaflet-marker-pane,
+.jh-map.is-picking .leaflet-popup-pane {
+  pointer-events: none;
+}
+
+/* ---------- Category colors (shared by markers, chips, popup labels) ---------- */
+.marker--sight { color: var(--cat-sight); }
+.marker--culture { color: var(--cat-culture); }
+.marker--food { color: var(--cat-food); }
+.marker--stay { color: var(--cat-stay); }
+.marker--festival { color: var(--cat-festival); }
+.marker--shopping { color: var(--cat-shopping); }
+.marker--leisure { color: var(--cat-leisure); }
+.marker--course { color: var(--cat-course); }
+.marker--etc { color: #64748b; }
+
+/* ---------- Markers ---------- */
+.jh-marker {
+  background: none;
+  border: 0;
+}
+.jh-marker:focus-visible {
+  outline: none !important;
+}
+.jh-marker:focus-visible .marker__inner {
+  outline: 3px solid var(--color-lantern-500);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+.marker__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  transition: transform 0.15s ease;
+  filter: drop-shadow(0 2px 3px rgb(15 27 61 / 0.35));
+}
+.jh-marker:hover .marker__inner {
+  transform: scale(1.1);
+}
+.marker--active .marker__inner {
+  transform: scale(1.3) translateY(-2px);
+  filter: drop-shadow(0 4px 8px rgb(15 27 61 / 0.45));
+}
+.marker-pin {
+  display: block;
+}
+.marker-pin__body {
+  fill: currentColor;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.marker-pin__dot {
+  fill: #fff;
+}
+.marker-pin__mark {
+  fill: var(--color-lantern-500);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.marker--active .marker-pin__body {
+  stroke: var(--color-night-900);
+}
+
+/* 유등 lanterns: ◇ outline = 담음, ◆ filled + glow = 밝힘 */
+.lantern {
+  position: relative;
+  display: block;
+  overflow: visible;
+}
+.lantern__string {
+  stroke: #94a3b8;
+  stroke-width: 1.4;
+}
+.lantern__cap {
+  fill: var(--color-night-700);
+}
+.lantern__tassel {
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.lantern--outline .lantern__body {
+  fill: #fffbeb;
+  stroke: var(--color-lantern-500);
+  stroke-width: 2.2;
+}
+.lantern--outline .lantern__rib {
+  fill: none;
+  stroke: rgb(245 158 11 / 0.45);
+  stroke-width: 1.2;
+}
+.lantern--outline .lantern__mark {
+  fill: none;
+  stroke: var(--color-lantern-500);
+  stroke-width: 1.8;
+}
+.lantern--filled .lantern__body {
+  fill: var(--color-lantern-500);
+  stroke: #c2410c;
+  stroke-width: 1.6;
+}
+.lantern--filled .lantern__rib {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.45);
+  stroke-width: 1.2;
+}
+.lantern--filled .lantern__mark {
+  fill: #fff7ed;
+}
+.lantern-glow {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-lantern-glow) 0%, rgb(251 146 60 / 0.25) 45%, rgb(251 146 60 / 0) 70%);
+  pointer-events: none;
+  animation: lantern-glow 2.6s ease-in-out infinite;
+}
+.marker--lit .lantern {
+  animation: lantern-float 3.2s ease-in-out infinite;
+}
+@keyframes lantern-glow {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+@keyframes lantern-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lantern-glow,
+  .marker--lit .lantern {
+    animation: none;
+  }
+  .marker__inner {
+    transition: none;
+  }
+}
+
+/* ---------- Clusters: category donut ---------- */
+.jh-cluster {
+  background: none;
+  border: 0;
+}
+.cluster__ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  padding: 5px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 6px rgb(15 27 61 / 0.35);
+  transition: transform 0.15s ease;
+}
+.cluster__count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--color-night-900);
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+}
+.cluster--lg .cluster__count {
+  font-size: 14px;
+}
+.jh-cluster:hover .cluster__ring,
+.cluster--active .cluster__ring {
+  transform: scale(1.12);
+}
+.cluster--active .cluster__ring {
+  box-shadow: 0 0 0 3px var(--color-night-900), 0 0 14px 4px var(--color-lantern-glow);
+}
+.jh-cluster:focus-visible {
+  outline: none !important;
+}
+.jh-cluster:focus-visible .cluster__ring {
+  box-shadow: 0 0 0 3px var(--color-lantern-500);
+}
+
+/* ---------- Base point (lodging) and demo virtual position ---------- */
+.jh-base-pin {
+  background: none;
+  border: 0;
+  filter: drop-shadow(0 2px 4px rgb(15 27 61 / 0.4));
+}
+.base-pin__bg {
+  fill: var(--color-night-900);
+  stroke: var(--color-lantern-500);
+  stroke-width: 2;
+}
+.base-pin__house {
+  fill: var(--color-lantern-500);
+}
+.jh-base-tooltip,
+.jh-virtual-tooltip {
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 0;
+  box-shadow: 0 2px 6px rgb(15 27 61 / 0.25);
+}
+.jh-base-tooltip {
+  background: var(--color-night-900);
+  color: #fff;
+}
+.jh-base-tooltip::before {
+  border-top-color: var(--color-night-900) !important;
+}
+.jh-virtual-tooltip {
+  background: #2563eb;
+  color: #fff;
+}
+.jh-virtual-tooltip::before {
+  border-bottom-color: #2563eb !important;
+}
+.jh-virtual-pin {
+  background: none;
+  border: 0;
+}
+.virtual-pin__dot {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+}
+.virtual-pin__pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: rgb(37 99 235 / 0.25);
+  animation: virtual-pulse 2s ease-out infinite;
+}
+@keyframes virtual-pulse {
+  from {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .virtual-pin__pulse {
+    animation: none;
+  }
+}
+
+/* ---------- Popup ---------- */
+.jh-popup .leaflet-popup-content {
+  width: auto !important;
+  margin: 0;
+}
+.map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 12px;
+  min-width: 200px;
+}
+.map-popup__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.map-popup__cat::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+.map-popup__dist {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+.map-popup__title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-text);
+  word-break: keep-all;
+}
+.map-popup__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.map-popup__link,
+.map-popup__save {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.leaflet-container a.map-popup__link {
+  background: var(--color-night-900);
+  color: #fff;
+  text-decoration: none;
+}
+.map-popup__save {
+  background: #fff7ed;
+  color: #b45309;
+  border: 1px solid #fed7aa;
+}
+.map-popup__save.is-saved {
+  background: var(--color-lantern-500);
+  color: var(--color-night-900);
+  border-color: var(--color-lantern-500);
+}
+.map-popup__save.is-lit {
+  cursor: default;
+  background: var(--color-night-900);
+  color: var(--color-lantern-500);
+  border-color: var(--color-night-900);
+}

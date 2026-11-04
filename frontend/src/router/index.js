@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import ExploreView from '../views/ExploreView.vue'
 import PlaceDetailView from '../views/PlaceDetailView.vue'
 import LanternsView from '../views/LanternsView.vue'
 import FestivalsView from '../views/FestivalsView.vue'
@@ -14,7 +13,8 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'home', component: HomeView },
-    { path: '/explore', name: 'explore', component: ExploreView },
+    // Lazy: keeps Leaflet + markercluster out of the main bundle. Full-height map, no footer.
+    { path: '/explore', name: 'explore', component: () => import('../views/ExploreView.vue'), meta: { fullscreen: true } },
     { path: '/places/:id', name: 'place', component: PlaceDetailView },
     { path: '/lanterns', name: 'lanterns', component: LanternsView },
     { path: '/festivals', name: 'festivals', component: FestivalsView },

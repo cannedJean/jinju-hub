@@ -21,6 +21,11 @@ export function formatDistance(m) {
   return `${(meters / 1000).toFixed(1)}km`
 }
 
+// Radius choices: 500 -> "500m", 1000 -> "1km", 1500 -> "1.5km"
+export function formatRadius(m) {
+  return m < 1000 ? `${m}m` : `${m / 1000}km`
+}
+
 function parts(iso) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ''))
   if (!match) return null

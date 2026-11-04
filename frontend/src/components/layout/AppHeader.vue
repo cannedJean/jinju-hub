@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import WeatherWidget from '../WeatherWidget.vue'
 import { useBreakpoint } from '../../composables/useBreakpoint'
+import { DEFAULT_STATE, parseQuery, searchState, toQuery } from '../../composables/useExploreQuery'
 
 defineProps({
   lanternCount: { type: Number, default: 0 },
@@ -10,8 +11,18 @@ defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const { isMobile } = useBreakpoint()
 const query = ref('')
+
+// Keep the box in sync with the explore URL (back/forward, clearing the search in the panel).
+watch(
+  () => [route.name, route.query.q],
+  ([name, q]) => {
+    if (name === 'explore') query.value = typeof q === 'string' ? q : ''
+  },
+  { immediate: true },
+)
 
 const NAV = [
   { to: '/explore', label: '탐색' },
@@ -21,9 +32,10 @@ const NAV = [
   { to: '/about/data', label: '데이터 출처' },
 ]
 
+// On the explore page a new search keeps the lodging radius (near/radius/sort); elsewhere it starts fresh.
 function submit() {
-  const q = query.value.trim()
-  router.push(q ? { path: '/explore', query: { q } } : { path: '/explore' })
+  const current = route.name === 'explore' ? parseQuery(route.query) : DEFAULT_STATE
+  router.push({ name: 'explore', query: toQuery(searchState(current, query.value)) })
 }
 </script>
 

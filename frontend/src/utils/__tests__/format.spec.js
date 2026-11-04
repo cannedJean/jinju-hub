@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { categoryLabel, formatDateRange, formatDistance } from '../format'
+import { categoryLabel, formatDateRange, formatDistance, formatRadius } from '../format'
 
 describe('formatDistance', () => {
   it('formats meters and kilometers', () => {
@@ -8,6 +8,15 @@ describe('formatDistance', () => {
   })
   it('returns empty string for null', () => {
     expect(formatDistance(null)).toBe('')
+  })
+})
+
+describe('formatRadius', () => {
+  it('uses whole units for radius choices', () => {
+    expect(formatRadius(500)).toBe('500m')
+    expect(formatRadius(1000)).toBe('1km')
+    expect(formatRadius(3000)).toBe('3km')
+    expect(formatRadius(1500)).toBe('1.5km')
   })
 })
 
