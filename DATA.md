@@ -18,10 +18,10 @@ JinjuHub의 장소 데이터는 `pipeline/`이 공공 API에서 모아 정제·�
 | S3 | 진주시 OpenAPI 축제 | `…/openapi/tour/festival.do` | 없음 | 9 | 시작/종료일, `undecided`(날짜 미정 문구) |
 | S4 | 진주시 OpenAPI 문화재 | `…/openapi/tour/asset.do` | 없음 | 590 | 문화·역사 |
 | S5 | 진주시 OpenAPI 숙박 | `…/openapi/tour/lodging.do` | 없음 | 94 | 숙박 |
-| T1 | TourAPI KorService2 `areaBasedList2` | `https://apis.data.go.kr/B551011/KorService2` | 서비스키 | **미수집(키 발급 전)** | 보강: 커버리지·이미지·개요. 필터 `lDongRegnCd=48&lDongSignguCd=170`, contentTypeId 12/14/15/25/28/32/38/39 |
-| T2 | TourAPI `detailCommon2`/`detailIntro2`/`detailImage2` | 동일 | 서비스키 | 미수집 | 상세(개요·운영시간·이미지 저작권 유형) |
-| T3 | TourAPI `searchFestival2` | 동일 | 서비스키 | 미수집 | 축제 기간 교차검증 (`eventStartDate=올해0101`) |
-| T4 | TourAPI `areaBasedSyncList2` | 동일 | 서비스키 | 미수집 | 주간 증분 갱신·숨김(showflag=0) 반영 |
+| T1 | TourAPI KorService2 `areaBasedList2` | `https://apis.data.go.kr/B551011/KorService2` | 서비스키 | 199 (타입별 §1.1 표) | 보강: 커버리지·이미지·개요. 필터 `lDongRegnCd=48&lDongSignguCd=170`, contentTypeId 12/14/15/25/28/32/38/39 |
+| T2 | TourAPI `detailCommon2`/`detailIntro2`/`detailImage2` | 동일 | 서비스키 | 199곳 상세 완료(`detail_pending` 0), 갤러리 27곳 | 상세(개요·운영시간·이미지 저작권 유형) |
+| T3 | TourAPI `searchFestival2` | 동일 | 서비스키 | 8 | 축제 기간 교차검증 (`eventStartDate=올해0101`) |
+| T4 | TourAPI `areaBasedSyncList2` | 동일 | 서비스키 | (증분 모드에서만) | 주간 증분 갱신·숨김(showflag=0) 반영 |
 | C1 | 큐레이션(수작업) | `pipeline/curation/*.yaml` | — | 진주8경 8, 30선 30(초안), 배지 6 | 게이미피케이션·시연 품질 |
 
 진주시 API 사실(2026-11-04 실측): `http://`는 `https://`로 302 리다이렉트, 페이지 파라미터 `page`(1부터)·`pageunit`(최대 10),
@@ -154,6 +154,20 @@ CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey
 - *강제 분리*(`pipeline/curation/merge_overrides.yaml`): `token_set_ratio`는 짧은 이름이 긴 이름에 포함되면 100이 되므로
   진주성↔진주성 우물, 진양호↔제8경 진양호 노을, 망진산↔제5경 망진산 봉수대를 분리했다.
 
+**TourAPI 보강 첫 실행(2026-11-04)에서 바꾼 것**
+
+- *같은 TourAPI 소스 안에서는 이름 유사(fuzzy) 매칭을 쓰지 않는다*: TourAPI는 쇼핑몰 안 브랜드 매장을 각각 콘텐츠로 올린다
+  ("아디다스 롯데몰 진주점" ⊃ "롯데몰 진주점" → `token_set_ratio` 100). 그대로 두면 롯데몰 17건·갤러리아 3건이 한 장소로 묶이고
+  제목·개요가 아무 매장 것이 됐다. contentid가 다르면 이미 다른 콘텐츠이므로 같은 소스 안 fuzzy는 근거에서 뺐다(같은 이름·전화·주소 규칙은 그대로, 진주시 소스는 변화 없음).
+- *강제 분리 추가*: 진주성 우물↔진주성(TourAPI)(키 정렬 순서상 우물이 먼저 묶여 진주시 "진주성"이 TourAPI 진주성과 합쳐지지 못함),
+  제1경 진주성 촉석루↔촉석루(TourAPI)(진주시 "진주 촉석루"를 거쳐 진주8경 항목이 사라지고 fallback이 쓰임),
+  김시민호↔물빛나루쉼터(같은 선착장 전화 → 게이트 실패 원인: 30선 "김시민호" 미해석), 진주논개제↔국가유산 미디어아트 진주성(같은 주최 전화),
+  미디어 파사드(물초울공원 중앙광장)↔물초울공원.
+- *강제 병합 추가*: 진주 레일바이크(진주시 관광지 ↔ TourAPI 레포츠, 카테고리 그룹이 달라 비교 안 됨),
+  진주정원박람회↔2026 진주 정원박람회(좌표·기간 동일, 이름 앞 연도 + 부서 대표번호라 자동 매칭 안 됨).
+- 결과: 병합 108쌍(same_name 64, fuzzy_name 34, same_phone 7, force_merge 2, same_name_addr 1). TourAPI 199곳 중 56곳이 진주시 장소와 합쳐지고 143곳이 새로 추가됐다.
+  남은 경계 사례(그대로 둠): 진주국제농식품박람회↔"2026 진주국제농식품박람회 농업체험관"(같은 행사), 청곡사 괘불탱(문화재)→청곡사(사찰에 이미 합쳐지던 문화재).
+
 ## 5. 품질 게이트 (report.py)
 
 리포트 항목: 소스별 수집 건수/실패, 정제 후 건수, 드롭 사유, 병합 쌍 수와 조건별 분포, 카테고리별 건수·좌표 보유율,
@@ -173,28 +187,42 @@ CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey
 스펙의 시작값은 sight·culture·stay 모두 0.85. 2026-11-04 첫 실행(진주시 API만, TourAPI 키 없음)의 좌표 보유율은
 sight 0.98, culture 0.65, stay 0.48이었다. 문화재 목록에는 좌표 없는 묘·비석이, 숙박 목록에는 좌표 없는 모텔이 많고
 지오코딩은 약관상 저장할 수 없다. culture 0.55, stay 0.40은 그 실행보다 약 10%p 낮은 **회귀 감시선**이다.
-TourAPI 수집 후 값을 다시 본다. 현재 기준값은 `report.md` 게이트 절과 `report.json`의 `coords_thresholds`에도 찍힌다.
+TourAPI 보강 실행(2026-11-04)에서 다시 봤다: sight 0.97, culture 0.65, stay 0.51 — 세 기준 모두 여유 있게 통과해 **임계값은 바꾸지 않았다**
+(TourAPI 항목은 좌표가 거의 다 있지만 문화재·모텔 수가 압도적이라 culture/stay 비율은 거의 그대로다). 현재 기준값은 `report.md` 게이트 절과 `report.json`의 `coords_thresholds`에도 찍힌다.
 
-## 6. 최신 실행 요약 (run_id `20261104T122749+0900`, 게이트 PASS)
+## 6. 최신 실행 요약 (run_id `20261104T125916+0900`, TourAPI 보강, 게이트 PASS)
 
 | 항목 | 값 |
 |---|---|
-| 수집 | tourinfo 191 · restaurant 269 · festival 9 · heritage 590 · lodging 94 (전부 ok, 호출 117회, 30.6s) |
-| 정제 후 | 1,151 (드롭 `out_of_region` 2) |
-| 병합 | 44쌍 (fuzzy_name 32, same_name 11, same_name_addr 1) |
-| 최종 | **1,107** — culture 576, food 260, sight 169, stay 93, festival 9 |
-| 좌표 보유율 | sight 0.98, culture 0.65, stay 0.48, food 0.40, festival 1.00 (전체 0.63) |
-| 결측률(채움 비율) | 대표 이미지 0.41, 개요 0.35, 전화 0.83, 운영시간 0.99 |
-| 축제 연도 | 2026: 5, 2024: 1, 미정: 3 |
-| 큐레이션 | 진주8경 8곳 모두 진주시 "제N경" 항목으로 해석(fallback 미사용), 30선 30곳, 야경 태그 4곳, 미해석 0 |
-| 배지 대상 수 | first_light 697, jinju8 8, food_explorer 260, history_walk 576, night_namgang 4, festival_guest 8 |
-| FTS | trigram |
+| 수집 | 진주시 tourinfo 191 · restaurant 269 · festival 9 · heritage 590 · lodging 94, TourAPI area 199 · festival 8 (7개 소스 전부 ok) |
+| 호출 | 실행 1회분 551회(진주시 117 + TourAPI 434: 목록 8·축제 1·상세 398·이미지 27), 30.9s. `detail_pending` **0** |
+| 정제 후 | 1,358 (드롭 `out_of_region` 2) |
+| 병합 | 108쌍 (same_name 64, fuzzy_name 34, same_phone 7, force_merge 2, same_name_addr 1) |
+| 최종 | **1,250** — culture 578, food 308, sight 196, stay 97, shopping 53, festival 14, leisure 4 (course 0: TourAPI 25 타입 0건) |
+| 출처 | 진주시만 1,051 · 진주시+TourAPI 56 · TourAPI만 143 |
+| 좌표 보유율 | sight 0.97, culture 0.65, stay 0.51, food 0.50, festival·shopping·leisure 1.00 (전체 0.67) |
+| 결측률(채움 비율) | 대표 이미지 **0.47**(직전 0.41), 개요 **0.43**(0.35), 전화 0.84(0.83), 운영시간 0.99 |
+| 이미지 | 1,784장 — TourAPI Type1 94 · Type3 209, 진주시 1,481 |
+| 축제 연도 | 2026: 10, 2024: 1, 미정: 3 |
+| 큐레이션 | 진주8경 8곳 모두 진주시 "제N경" 항목(fallback 미사용), 30선 30곳(14곳에 TourAPI `source_keys` → 갤러리), 야경 태그 4곳, 미해석 0 |
+| 배지 대상 수 | first_light 838, jinju8 8, food_explorer 308, history_walk 578, night_namgang 4, festival_guest 13 |
+| alias | 0 (직전 커밋본 places.db의 ID 1,107개는 모두 승계) |
+| FTS | trigram, `integrity_check` ok |
+
+**실행 방법과 쿼터(2026-11-04)**: 로컬 원장 기준 이날 사용 803/900 — 진주시 단독 실행 2회(234) + `verify-codes` 9 + 픽스처 녹화·
+`areaBasedSyncList2` 확인 9 + TourAPI 보강 **실제 실행 1회 537**(진주시 117 + TourAPI 420, 게이트 FAIL: 30선 "김시민호" 미해석 → §4 수정)
++ 30선 갤러리용 `detailImage2` 14. 같은 날 다시 돌린 실행(병합 규칙·큐레이션 수정 후)은 첫 실행의 응답을 그대로 재생하는 로컬 녹화 캐시
+(키 미포함, 저장소 밖)로 돌려 TourAPI 호출을 아꼈다. 위 표는 직전 커밋본(진주시 단독) places.db에서 출발한 마지막 재생 실행이다.
 
 ## 7. 큐레이션 (pipeline/curation/)
 
 - `jinju8.yaml`: 진주8경(공식: 진주시 관광 누리집 > 진주8경, https://www.jinju.go.kr/02232/02244.web). 진주시 API의 "제N경" 항목을 잡는다.
   fallback(항목이 사라졌을 때만 쓰는 큐레이션 장소)의 좌표·개요는 같은 API 항목에서 옮겼고 원문에 없는 내용은 넣지 않는다.
 - `collection30.yaml`: "진주 유등 30선" — **현재 `status: draft`, 사용자 확정 대기.** 진주8경 8 + 대표 명소·박물관 10 + 향토 맛집·먹거리 6 + 야경/체험 6.
+  TourAPI 보강 후 TourAPI 항목이 1:1로 합쳐진 14곳(진주성·국립진주박물관·유등전시관·이성자미술관·실크박물관·청동기문화박물관·경상남도수목원·
+  월아산 숲속의 진주·진주대첩 역사공원·청곡사·소망진산유등테마공원·음악분수·유등체험관·레일바이크)에 `source_keys: [tourapi.area:<contentid>]`를 넣었다 →
+  이 항목은 상세가 캐시돼 있어도 한 번은 `detailImage2`(갤러리)를 받는다(`images_fetched`로 다음 실행부터 재호출 없음).
+  1:1이 아닌 후보(진주중앙시장·논개시장 통합 항목, 하연옥 본점≠하대점, 의기사와 의암≠제2경)는 넣지 않았다.
   진주시 음식점 API에 향토 음식점이 적어 먹거리 묶음에 전통시장·음식 체험을 넣었다. TourAPI 수집 후 다시 고르는 것을 권한다.
   항목 수정 후 `run`을 다시 실행하면 된다(미해석 항목이 있으면 게이트가 실패해 기존 DB가 유지된다).
 - `tags.yaml`: indoor(문화 카테고리·박물관류 이름), outdoor(명소·레포츠), local_food(냉면·비빔밥·장어·헛제사밥), night_view(수작업: 촉석루·진주성·남가람 별빛길·망진산 봉수대).

@@ -192,17 +192,20 @@ class TourApiAreaSource:
                     seen_ids.add(cid)
                     queue_items.append(item)
 
-        # reuse previous detail when unchanged and not pending
+        # reuse previous detail when unchanged and not pending (and, for collection30 keys, images fetched)
         todo: list[dict] = []
         for item in queue_items:
             cid = str(item["contentid"])
             old = prev.get(cid)
+            images_ok = (f"{self.name}:{cid}" not in ctx.collection_keys
+                         or (old is not None and (old.payload.get("images_fetched") or old.payload.get("images"))))
             if (
                 old is not None and cid not in pending_ids
                 and (old.payload.get("list") or {}).get("modifiedtime") == item.get("modifiedtime")
                 and not old.payload.get("detail_pending")
                 and "detail_error" not in old.payload
                 and "common" in old.payload
+                and images_ok
             ):
                 results[cid] = old
             else:
@@ -254,6 +257,7 @@ class TourApiAreaSource:
             if not item.get("firstimage") or f"{self.name}:{cid}" in ctx.collection_keys:
                 imgs = await _call(ctx, self.name, "detailImage2", {"contentId": cid, "imageYN": "Y"})
                 payload["images"] = items_of(imgs)[0]
+                payload["images_fetched"] = True
         except QuotaExceeded:
             state["quota"] = True
             payload["detail_pending"] = True

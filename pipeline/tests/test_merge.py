@@ -184,3 +184,14 @@ def test_shared_phone_boundary_through_merge_records():
            rec("관광지B", 35.1905, 128.0805, phone="055-749-1111", source_id="c2")]
     tour2_ = rec("완전히 다른 이름", 35.1902, 128.0802, phone="055-749-1111", source="tourapi.area", source_id="t2")
     assert len(M(dup + [tour2_]).places) == 1
+
+
+def test_fuzzy_name_within_one_tourapi_source_is_not_evidence():
+    # Recorded 2026-11-04: TourAPI lists every brand store inside a mall as its own content
+    # ("아디다스 롯데몰 진주점" contains "롯데몰 진주점" -> token_set_ratio 100), which chained 17 records into one.
+    mall = tour("롯데몰 진주점", id="3086012", cat="shopping", lat=35.2051, lng=128.1260)
+    shop = tour("아디다스 롯데몰 진주점", id="4008310", cat="shopping", lat=35.2052, lng=128.1261)
+    assert match_reason(mall, shop) is None
+    assert len(M([mall, shop]).places) == 2
+    assert match_reason(city("남강 유등 전시관"), tour("남강 유등 전시관 매표소")) == "fuzzy_name"
+    assert match_reason(tour("롯데몰 진주점"), tour2("롯데몰 진주점")) == "same_name"

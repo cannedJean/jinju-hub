@@ -73,7 +73,9 @@ def _digits(p: str | None) -> str:
 
 def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] = frozenset()) -> str | None:
     """Merge evidence for a pair, or None. Phone evidence needs two different sources and a number
-    outside ``shared_phones`` (the city API lists managing-department numbers on many records)."""
+    outside ``shared_phones`` (the city API lists managing-department numbers on many records).
+    Fuzzy names are no evidence inside one TourAPI source: its contentids are already distinct contents
+    (e.g. each brand store in a mall: "아디다스 롯데몰 진주점" vs "롯데몰 진주점")."""
     if _group_of(a.category) != _group_of(b.category):
         return None
     na, nb = normalize_name(a.title), normalize_name(b.title)
@@ -87,7 +89,8 @@ def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] =
     if na and na == nb and d <= SAME_NAME_M:
         return "same_name"
     ta, tb = unicodedata.normalize("NFKC", a.title), unicodedata.normalize("NFKC", b.title)
-    if d <= FUZZY_M and fuzz.token_set_ratio(ta, tb) >= 90:
+    same_tour_source = a.source == b.source and not a.source.startswith(CITY_PREFIX)
+    if d <= FUZZY_M and not same_tour_source and fuzz.token_set_ratio(ta, tb) >= 90:
         return "fuzzy_name"
     pa = _digits(a.phone)
     if pa and pa == _digits(b.phone) and a.source != b.source and pa not in shared_phones and d <= PHONE_M:

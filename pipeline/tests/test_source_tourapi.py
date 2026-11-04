@@ -412,3 +412,23 @@ def test_sync_month_prefixes_cross_year_and_same_month():
     assert sync_month_prefixes(date(2026, 11, 28), date(2027, 1, 5)) == ["202611", "202612", "202701"]
     assert sync_month_prefixes(date(2026, 11, 1), date(2026, 11, 4)) == ["202611"]
     assert sync_month_prefixes(date(2026, 11, 5), date(2026, 11, 4)) == ["202611"]  # clock skew: still one
+
+
+async def test_collection_key_fetches_images_even_when_detail_is_reused(ctx_factory, fixture_json, previous_snapshot):
+    """A source key added to collection30 after the item's detail was cached must still get detailImage2."""
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
+    ctx.previous = previous_snapshot({"tourapi.area": _prev_all(fixture_json)})
+    ctx.collection_keys.add(f"tourapi.area:{JINJUSEONG}")
+    recs = await TourApiAreaSource().collect(ctx)
+    assert [r.url.params["contentId"] for r in fake.ops("detailImage2")] == [JINJUSEONG]
+    assert len(fake.ops("detailCommon2")) == 1
+    r = next(x for x in recs if x.source_id == JINJUSEONG)
+    assert len(r.payload["images"]) == 10 and r.payload["images_fetched"] is True
+
+    fake2 = FakeTour(fixture_json)  # next run: nothing changed -> no calls at all
+    ctx2 = ctx_factory(httpx.MockTransport(fake2), **KEY)
+    ctx2.previous = previous_snapshot({"tourapi.area": recs})
+    ctx2.collection_keys.add(f"tourapi.area:{JINJUSEONG}")
+    await TourApiAreaSource().collect(ctx2)
+    assert not fake2.ops("detailImage2") and not fake2.ops("detailCommon2")

@@ -1,8 +1,17 @@
 # 병합 예외 — "<source>:<source_id>" 쌍. force_split이 자동 매칭보다 우선한다.
 # 2026-11-04 첫 실데이터 검토: token_set_ratio가 "짧은 이름 ⊂ 긴 이름"이면 100이 되어
 # 서로 다른 진주시 관광지 목록이 합쳐지는 경우를 분리한다.
-force_merge: []
+force_merge:
+  - [jinju_city.tourinfo:780, tourapi.area:1987215]    # 진주 레일바이크 (진주시 관광지 ↔ TourAPI 레포츠: 카테고리가 달라 자동 비교 안 됨)
+  - [jinju_city.festival:1621, tourapi.festival:3494070]  # 진주정원박람회 ↔ 2026 진주 정원박람회 (같은 좌표·기간; 이름 앞 연도와 부서 대표번호 때문에 자동 매칭 안 됨)
 force_split:
   - [jinju_city.tourinfo:605, jinju_city.tourinfo:1163]   # 진주성 ↔ 진주성 우물
   - [jinju_city.tourinfo:402, jinju_city.tourinfo:626]    # 진양호 ↔ 제8경 진양호 노을
   - [jinju_city.tourinfo:94, jinju_city.tourinfo:623]     # 망진산 ↔ 제5경 망진산 봉수대
+  # 2026-11-04 TourAPI 보강 첫 실행 검토 (진주시 ↔ TourAPI)
+  - [jinju_city.tourinfo:1163, tourapi.area:126833]    # 진주성 우물 ↔ 진주성(TourAPI) — 진주성(605)과 합쳐져야 함
+  - [jinju_city.tourinfo:621, tourapi.area:126217]     # 제1경 진주성 촉석루 ↔ 촉석루(TourAPI) — 진주8경 항목은 따로
+  - [jinju_city.tourinfo:1388, tourapi.area:3058179]   # 김시민호(유람선) ↔ 물빛나루쉼터 — 같은 선착장 전화
+  - [jinju_city.festival:701, tourapi.area:3333059]    # 진주논개제 ↔ 국가유산 미디어아트 진주성 — 같은 주최 전화
+  - [jinju_city.festival:701, tourapi.festival:3333059]
+  - [jinju_city.tourinfo:1522, tourapi.area:2894553]   # 미디어 파사드(물초울공원 중앙광장) ↔ 물초울공원
