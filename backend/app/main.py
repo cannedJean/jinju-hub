@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -47,6 +48,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestLogMiddleware)
     register_exception_handlers(app)
     install_secret_mask()
+    # httpx logs full request URLs at INFO; the KMA/TourAPI URLs carry authKey/serviceKey.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     app.include_router(api_router, prefix=settings.api_prefix)
     return app
 

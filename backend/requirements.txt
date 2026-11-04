@@ -6,7 +6,7 @@ psycopg[binary]>=3.2,<4
 pydantic>=2.6,<3
 pydantic-settings>=2.2,<3
 httpx>=0.28,<1
-anthropic==1.17.0
+anthropic>=2.4,<3
 bcrypt>=4.2,<5
 slowapi>=0.1.9,<1
 PyYAML>=6,<7
