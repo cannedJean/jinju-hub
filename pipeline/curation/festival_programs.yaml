@@ -1,8 +1,12 @@
+# 주요 축제 → 프로그램 요약 + 점등 대상 장소(venue). venue 매처는 category 를 지정해
+# 축제 행이나 이름이 우연히 겹치는 음식점(예: "도미노피자진주교대점")에 걸리지 않게 한다.
+# 2026-11-04 실데이터 기준: "남강둔치"·"진주교" 항목은 진주시 API에 없어, 진주성 맞은편
+# 남강변 산책로인 "남가람 별빛길"(tourinfo idx 1606)로 바꿨다.
 items:
   - match_festival: {title_contains: 유등}
     programs: ["유등 전시", "남강 유등 띄우기", "소망등 달기", "개막 불꽃놀이"]
     venues:
-      - {title_contains: 진주성, near: [35.1893, 128.0807], within_m: 1500}
-      - {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}
-      - {title_contains: [남강둔치, 진주교], near: [35.1869, 128.0889], within_m: 2000}
+      - {title_contains: 진주성, category: sight, near: [35.1895, 128.0800], within_m: 300}
+      - {title_contains: 촉석루, category: sight, near: [35.1895, 128.0819], within_m: 300}
+      - {title_contains: 남가람 별빛길, category: sight, near: [35.1872, 128.0822], within_m: 500}
     source_url: https://www.jinju.go.kr/tour.web

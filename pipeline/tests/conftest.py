@@ -130,3 +130,87 @@ def cur():
     from jinju_pipeline.curation import load_curation
 
     return load_curation(Path(__file__).resolve().parent / "fixtures" / "curation")
+
+
+# ---- A12 end-to-end fixtures ----
+
+def _recorded_handler(city_kinds=None, tour=True):
+    """MockTransport handler serving the recorded A4/A5 fixtures by URL pattern.
+
+    Unrecorded requests get an empty result (city: ``results: []``; TourAPI: ``items: ""``,
+    ``totalCount: 0``). ``city_kinds`` limits which city endpoints return their page-1 fixture.
+    """
+    import json
+
+    import httpx
+
+    base = Path(__file__).resolve().parent / "fixtures"
+    endpoint_kind = {"tourinfo.do": "tourinfo", "restaurant.do": "restaurant", "festival.do": "festival",
+                     "asset.do": "heritage", "lodging.do": "lodging"}
+    tour_empty = {"response": {"header": {"resultCode": "0000", "resultMsg": "OK"},
+                               "body": {"items": "", "numOfRows": 0, "pageNo": 1, "totalCount": 0}}}
+
+    def load(rel):
+        return json.loads((base / rel).read_text(encoding="utf-8"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        host, path, p = request.url.host, request.url.path, request.url.params
+        if host == "www.jinju.go.kr":
+            kind = endpoint_kind.get(path.rsplit("/", 1)[-1])
+            if kind is None:
+                return httpx.Response(404)
+            if p.get("page") == "1" and (city_kinds is None or kind in city_kinds):
+                return httpx.Response(200, json=load(f"jinju_city/{kind}_p1.json"))
+            return httpx.Response(200, json={"record_count": 0, "results": [], "status": "OK"})
+        if host == "apis.data.go.kr" and tour:
+            op = path.rsplit("/", 1)[-1]
+            cid = p.get("contentId")
+            if op == "areaBasedList2" and p.get("contentTypeId") == "12":
+                return httpx.Response(200, json=load("tourapi/area_12_p1.json"))
+            if op == "searchFestival2":
+                return httpx.Response(200, json=load("tourapi/festival_p1.json"))
+            if op == "ldongCode2":
+                return httpx.Response(200, json=load("tourapi/ldong_48.json"))
+            if cid == "126508" and op == "detailCommon2":
+                return httpx.Response(200, json=load("tourapi/detail_common_126508.json"))
+            if cid == "126508" and op == "detailIntro2":
+                return httpx.Response(200, json=load("tourapi/detail_intro_126508_12.json"))
+            if cid == "126508" and op == "detailImage2":
+                return httpx.Response(200, json=load("tourapi/detail_image_126508.json"))
+            return httpx.Response(200, json=tour_empty)
+        return httpx.Response(404)
+
+    return handler
+
+
+@pytest.fixture
+def recorded_transport():
+    import httpx
+
+    return httpx.MockTransport(_recorded_handler())
+
+
+@pytest.fixture
+def transport_returning_few():
+    """Only the festival endpoint returns data: a run far below 80% of a normal one."""
+    import httpx
+
+    return httpx.MockTransport(_recorded_handler(city_kinds={"festival"}, tour=False))
+
+
+@pytest.fixture
+def tmp_settings(tmp_path):
+    from jinju_pipeline.settings import Settings
+
+    return Settings(
+        _env_file=None,
+        data_go_kr_key=None,
+        raw_dir=tmp_path / "raw",
+        work_dir=tmp_path / "work",
+        state_dir=tmp_path / "state",
+        output_db=tmp_path / "out" / "places.db",
+        output_report=tmp_path / "out" / "report.json",
+        curation_dir=Path(__file__).resolve().parent / "fixtures" / "curation",
+        gate_min_first_run=5,
+        city_min_interval=0.0,
+    )

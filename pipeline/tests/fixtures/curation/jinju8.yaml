@@ -1,6 +1,8 @@
 # 진주8경 — 이름·순서는 진주시 관광 누리집 > 관광명소 > 진주8경 (2026-11-04 확인)
 # 스펙 초안(비봉루/월아산 일출/진양호 일몰)과 달리 공식 표기는 6경 비봉산의 봄, 7경 월아산 해돋이, 8경 진양호 노을.
-# fallback 좌표는 근사값(WGS84, 진주 bbox 내부). 실제 장소가 match로 잡히면 사용되지 않는다.
+# 테스트 사본: match 의 이름·near 는 tests/fixtures/places_small.json 과 녹화 픽스처에 맞춰 둔 것이다
+# (운영본 pipeline/curation/jinju8.yaml 은 진주시 API의 "제N경" 항목을 잡는다).
+# fallback 좌표는 테스트용 값이며 실제 장소가 match로 잡히면 사용되지 않는다.
 source_url: https://www.jinju.go.kr/02232/02244.web
 items:
   - rank: 1
@@ -14,24 +16,24 @@ items:
   - rank: 3
     label: 뒤벼리
     match: {title_contains: 뒤벼리, near: [35.1855, 128.0955], within_m: 2000}
-    fallback: {title: 뒤벼리, lat: 35.1855, lng: 128.0955, overview: 남가람 문화거리를 마주보며 남강 가에 우뚝 솟은 벼랑이다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 뒤벼리, lat: 35.1855, lng: 128.0955, overview: 남가람 문화거리를 마주보며 남강 가에 우뚝 솟은 벼랑이다., source_url: "https://www.jinju.go.kr/02232/02244.web"}
   - rank: 4
     label: 새벼리
     match: {title_contains: 새벼리, near: [35.1790, 128.0590], within_m: 2000}
-    fallback: {title: 새벼리, lat: 35.1790, lng: 128.0590, overview: 시내로 들어오는 길목에 위치한 남강변 벼랑이다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 새벼리, lat: 35.1790, lng: 128.0590, overview: 시내로 들어오는 길목에 위치한 남강변 벼랑이다., source_url: "https://www.jinju.go.kr/02232/02244.web"}
   - rank: 5
     label: 망진산 봉수대
     match: {title_contains: 봉수대, near: [35.1633, 128.0728], within_m: 2000}
-    fallback: {title: 망진산 봉수대, lat: 35.1633, lng: 128.0728, overview: 망진산 정상의 5연조 구조 봉수대이다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 망진산 봉수대, lat: 35.1633, lng: 128.0728, overview: 망진산 정상의 5연조 구조 봉수대이다., source_url: "https://www.jinju.go.kr/02232/02244.web"}
   - rank: 6
     label: 비봉산의 봄
     match: {title_contains: 비봉산, near: [35.1995, 128.0900], within_m: 2500}
-    fallback: {title: 비봉산의 봄, lat: 35.1995, lng: 128.0900, overview: 비봉산은 시내를 조망할 수 있는 곳으로 봄꽃이 아름답다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 비봉산의 봄, lat: 35.1995, lng: 128.0900, overview: 비봉산은 시내를 조망할 수 있는 곳으로 봄꽃이 아름답다., source_url: "https://www.jinju.go.kr/02232/02244.web"}
   - rank: 7
     label: 월아산 해돋이
     match: {title_contains: 월아산, near: [35.1500, 128.2050], within_m: 5000}
-    fallback: {title: 월아산 해돋이, lat: 35.1500, lng: 128.2050, overview: 월아산은 도시자연공원으로 지정된 산으로 해돋이 명소이다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 월아산 해돋이, lat: 35.1500, lng: 128.2050, overview: 월아산은 도시자연공원으로 지정된 산으로 해돋이 명소이다., source_url: "https://www.jinju.go.kr/02232/02244.web"}
   - rank: 8
     label: 진양호 노을
     match: {title_contains: 진양호, near: [35.1590, 128.0450], within_m: 3500}
-    fallback: {title: 진양호 노을, lat: 35.1590, lng: 128.0450, overview: 진양호는 덕천강과 경호강이 만나는 곳의 인공호수로 노을이 아름답다. (좌표 근사값), source_url: "https://www.jinju.go.kr/02232/02244.web"}
+    fallback: {title: 진양호 노을, lat: 35.1590, lng: 128.0450, overview: 진양호는 덕천강과 경호강이 만나는 곳의 인공호수로 노을이 아름답다., source_url: "https://www.jinju.go.kr/02232/02244.web"}

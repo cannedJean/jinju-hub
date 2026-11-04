@@ -111,3 +111,18 @@ def test_operational_yaml_loads(repo_root):
     c = load_curation(repo_root / "pipeline" / "curation")
     assert len(c["jinju8"]["items"]) == 8 and len(c["badges"]["items"]) == 6
     assert c["jinju8"]["source_url"].startswith("https://www.jinju.go.kr")
+
+
+def test_operational_collection30_draft_has_30_matchable_items(repo_root):
+    c = load_curation(repo_root / "pipeline" / "curation")["collection30"]
+    assert c["status"] == "draft"
+    assert len(c["items"]) == 30 and all(i.get("match") for i in c["items"])
+    assert len({i["key"] for i in c["items"]}) == 30
+
+
+def test_operational_jinju8_fallbacks_and_venues_are_clean(repo_root):
+    c = load_curation(repo_root / "pipeline" / "curation")
+    for item in c["jinju8"]["items"]:
+        assert "근사" not in item["fallback"]["overview"] and "(" not in item["fallback"]["overview"]
+    for prog in c["festival_programs"]["items"]:
+        assert all(v.get("category") for v in prog["venues"])  # never match festival rows themselves

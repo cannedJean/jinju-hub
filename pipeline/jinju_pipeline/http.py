@@ -146,9 +146,10 @@ async def fetch_json(
     return await retrying(attempt)
 
 
-def make_client(timeout: float = 20.0) -> httpx.AsyncClient:
+def make_client(timeout: float = 20.0, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         timeout=timeout,
+        transport=transport,
         follow_redirects=True,
         headers={"User-Agent": "JinjuHub-pipeline/0.1 (education project)"},
     )

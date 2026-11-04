@@ -1,8 +1,9 @@
+# 테스트 사본 — places_small.json(진주교)과 녹화 픽스처(남가람 별빛길) 양쪽에서 해석되도록 맞춘 venue.
 items:
   - match_festival: {title_contains: 유등}
     programs: ["유등 전시", "남강 유등 띄우기", "소망등 달기", "개막 불꽃놀이"]
     venues:
-      - {title_contains: 진주성, near: [35.1893, 128.0807], within_m: 1500}
-      - {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}
-      - {title_contains: [남강둔치, 진주교], near: [35.1869, 128.0889], within_m: 2000}
+      - {title_contains: 진주성, category: sight, near: [35.1893, 128.0807], within_m: 1500}
+      - {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}   # places_small 은 culture, 녹화 픽스처는 sight
+      - {title_contains: [남강둔치, 진주교, 남가람 별빛길], category: sight, near: [35.1869, 128.0889], within_m: 2000}
     source_url: https://www.jinju.go.kr/tour.web

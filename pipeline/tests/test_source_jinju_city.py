@@ -9,7 +9,8 @@ from jinju_pipeline.sources.jinju_city import CITY_ENDPOINTS, JinjuCitySource, p
 
 def test_parse_page_tourinfo(fixture_json):
     items, total = parse_page(fixture_json("jinju_city/tourinfo_p1.json"))
-    assert total >= 150 and 1 <= len(items) <= 10
+    # the recorded page 1 (10 items) plus real items from later pages appended in A12 for e2e content
+    assert total >= 150 and len(items) >= 10
     assert {"name", "xposition", "yposition"} <= set(items[0])
 
 

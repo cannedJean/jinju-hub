@@ -1,0 +1,93 @@
+{
+  "run_id": "20261104T122749+0900",
+  "generated_at": "2026-11-04T12:28:19+09:00",
+  "out_of_bbox_final": 0,
+  "reused_streak": 0,
+  "content_hash": "bf98e4553d7036d2c845dbd40f0b4598d39f04188ab2881037b406390b640385",
+  "sources": [
+    {
+      "source": "jinju_city.tourinfo",
+      "status": "ok",
+      "records": 191,
+      "calls": 20,
+      "error": null
+    },
+    {
+      "source": "jinju_city.restaurant",
+      "status": "ok",
+      "records": 269,
+      "calls": 27,
+      "error": null
+    },
+    {
+      "source": "jinju_city.festival",
+      "status": "ok",
+      "records": 9,
+      "calls": 1,
+      "error": null
+    },
+    {
+      "source": "jinju_city.heritage",
+      "status": "ok",
+      "records": 590,
+      "calls": 59,
+      "error": null
+    },
+    {
+      "source": "jinju_city.lodging",
+      "status": "ok",
+      "records": 94,
+      "calls": 10,
+      "error": null
+    }
+  ],
+  "cleaned_count": 1151,
+  "dropped": {
+    "out_of_region": 2
+  },
+  "merge": {
+    "pairs": 44,
+    "by_reason": {
+      "fuzzy_name": 32,
+      "same_name": 11,
+      "same_name_addr": 1
+    }
+  },
+  "final_count": 1107,
+  "category_counts": {
+    "festival": 9,
+    "culture": 576,
+    "sight": 169,
+    "stay": 93,
+    "food": 260
+  },
+  "completeness": {
+    "hero_image": 0.4119,
+    "overview": 0.3541,
+    "phone": 0.8257,
+    "hours": 0.9919,
+    "coords": 0.6296
+  },
+  "coords_by_category": {
+    "festival": 1.0,
+    "culture": 0.6458,
+    "sight": 0.9822,
+    "stay": 0.4839,
+    "food": 0.4038
+  },
+  "coords_thresholds": {
+    "sight": 0.85,
+    "culture": 0.55,
+    "stay": 0.4
+  },
+  "festival_years": {
+    "2024": 1,
+    "2026": 5,
+    "unknown": 3
+  },
+  "detail_pending": 0,
+  "quota_used": 117,
+  "unresolved_curation": [],
+  "unresolved_tags": [],
+  "elapsed_s": 30.59
+}

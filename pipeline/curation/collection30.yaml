@@ -1,11 +1,46 @@
-# 초안: 진주8경만 포함. 운영 30선은 Task A12에서 사용자와 확정한다.
+# 진주 유등 30선 — 초안(DRAFT). 사용자 확정을 기다리는 중이다.
+# 2026-11-04 첫 실데이터(진주시 OpenAPI만, TourAPI 키 미발급) places.db를 보고 작성했다.
+# 구성(스펙 §5.8): 진주8경 8 + 대표 명소·박물관 10 + 향토 맛집·먹거리 6 + 야경/체험 6 = 30.
+# 진주시 음식점 API에는 향토 음식점이 적어(냉면·비빔밥 메뉴가 있는 곳은 하연옥 하대점뿐) 먹거리 묶음에
+# 전통시장·음식 체험을 넣었다. TourAPI(음식점 39) 수집 후 다시 고르는 것을 권한다.
+#
+# 각 항목의 match 는 반드시 장소 하나로 해석되어야 한다(미해석 = 게이트 실패).
+#   near = 진주시 API 좌표(소수 4자리), category 로 동명 이소(예: 음식점 "촉석루")를 구분한다.
+# group / reason 은 사람이 읽는 메모이며 파이프라인은 쓰지 않는다.
 # source_keys: 선택. TourAPI/진주시 원천 키("<source>:<source_id>")를 알게 되면 채운다 (러너가 collection_source_keys로 읽음).
+status: draft
 items:
-  - {key: jinju8-1-chokseongnu, label: 진주성 촉석루, match: {title_contains: 촉석루, near: [35.1892, 128.0816], within_m: 1500}}
-  - {key: jinju8-2-uiam, label: 남강 의암, match: {title_contains: 의암, near: [35.1887, 128.0822], within_m: 800}}
-  - {key: jinju8-3-dwibyeori, label: 뒤벼리, match: {title_contains: 뒤벼리, near: [35.1855, 128.0955], within_m: 2000}}
-  - {key: jinju8-4-saebyeori, label: 새벼리, match: {title_contains: 새벼리, near: [35.1790, 128.0590], within_m: 2000}}
-  - {key: jinju8-5-bongsudae, label: 망진산 봉수대, match: {title_contains: 봉수대, near: [35.1633, 128.0728], within_m: 2000}}
-  - {key: jinju8-6-bibongsan, label: 비봉산의 봄, match: {title_contains: 비봉산, near: [35.1995, 128.0900], within_m: 2500}}
-  - {key: jinju8-7-wolasan, label: 월아산 해돋이, match: {title_contains: 월아산, near: [35.1500, 128.2050], within_m: 5000}}
-  - {key: jinju8-8-jinyangho, label: 진양호 노을, match: {title_contains: 진양호, near: [35.1590, 128.0450], within_m: 3500}}
+  # ---- 진주8경 (jinju8.yaml 과 같은 장소; 두 번째 이름은 jinju8 fallback 장소의 제목)
+  - {key: jinju8-1, label: 진주성 촉석루, group: jinju8, reason: 진주8경 제1경, match: {title_contains: [제1경, 진주성 촉석루], category: sight, near: [35.1895, 128.0819], within_m: 1000}}
+  - {key: jinju8-2, label: 남강 의암, group: jinju8, reason: 진주8경 제2경, match: {title_contains: [제2경, 남강 의암], category: sight, near: [35.1892, 128.0822], within_m: 1000}}
+  - {key: jinju8-3, label: 뒤벼리, group: jinju8, reason: 진주8경 제3경, match: {title_contains: [제3경, 뒤벼리], category: sight, near: [35.1865, 128.0964], within_m: 1000}}
+  - {key: jinju8-4, label: 새벼리, group: jinju8, reason: 진주8경 제4경, match: {title_contains: [제4경, 새벼리], category: sight, near: [35.1680, 128.1010], within_m: 1000}}
+  - {key: jinju8-5, label: 망진산 봉수대, group: jinju8, reason: 진주8경 제5경, match: {title_contains: [제5경, 망진산 봉수대], category: sight, near: [35.1753, 128.0762], within_m: 1000}}
+  - {key: jinju8-6, label: 비봉산의 봄, group: jinju8, reason: 진주8경 제6경, match: {title_contains: [제6경, 비봉산의 봄], category: sight, near: [35.2105, 128.0858], within_m: 1000}}
+  - {key: jinju8-7, label: 월아산 해돋이, group: jinju8, reason: 진주8경 제7경, match: {title_contains: [제7경, 월아산 해돋이], category: sight, near: [35.1914, 128.1903], within_m: 1000}}
+  - {key: jinju8-8, label: 진양호 노을, group: jinju8, reason: 진주8경 제8경, match: {title_contains: [제8경, 진양호 노을], category: sight, near: [35.1719, 128.0314], within_m: 1000}}
+  # ---- 대표 명소·박물관
+  - {key: jinjuseong, label: 진주성, group: landmark, reason: 촉석루·김시민장군 동상 등이 모인 진주 역사의 중심, match: {title_contains: 진주성, category: sight, near: [35.1895, 128.0800], within_m: 300}}
+  - {key: national-museum, label: 국립진주박물관, group: landmark, reason: 진주성 안 임진왜란 전문 국립박물관(실내), match: {title_contains: 국립진주박물관, category: culture, near: [35.1890, 128.0768], within_m: 300}}
+  - {key: lantern-hall, label: 진주남강유등전시관, group: landmark, reason: 유등을 연중 관람하는 전시관 — 유등 30선의 상징, match: {title_contains: 유등전시관, category: culture, near: [35.1821, 128.0773], within_m: 300}}
+  - {key: leesungja-museum, label: 진주시립이성자미술관, group: landmark, reason: 진주 출신 화가 이성자의 시립미술관(실내), match: {title_contains: 이성자미술관, category: culture, near: [35.1756, 128.1430], within_m: 300}}
+  - {key: silk-museum, label: 진주실크박물관, group: landmark, reason: 진주 실크 산업의 역사를 다루는 박물관(실내), match: {title_contains: 실크박물관, category: culture, near: [35.1598, 128.1650], within_m: 300}}
+  - {key: bronze-museum, label: 진주청동기문화박물관, group: landmark, reason: 대평리 청동기 유적을 보여 주는 박물관, match: {title_contains: 청동기문화박물관, category: sight, near: [35.2244, 127.9621], within_m: 300}}
+  - {key: arboretum, label: 경상남도수목원, group: landmark, reason: 102ha 규모의 도립 수목원, match: {title_contains: 경상남도수목원, category: sight, near: [35.1593, 128.2928], within_m: 300}}
+  - {key: forest-jinju, label: 월아산 숲속의 진주, group: landmark, reason: 월아산 산림교육·레포츠 복합단지, match: {title_contains: 월아산 숲속의 진주, category: sight, near: [35.2000, 128.1941], within_m: 300}}
+  - {key: victory-park, label: 진주대첩 역사공원, group: landmark, reason: 진주대첩을 기리는 진주성 앞 역사공원, match: {title_contains: 진주대첩 역사공원, category: sight, near: [35.1904, 128.0837], within_m: 300}}
+  - {key: cheonggoksa, label: 청곡사, group: landmark, reason: 국가유산 불상·괘불을 품은 월아산 자락의 사찰, match: {title_contains: 청곡사, category: sight, near: [35.1903, 128.1811], within_m: 300}}
+  # ---- 향토 맛집·먹거리
+  - {key: hayeonok, label: 하연옥 하대점, group: food, reason: 진주물냉면·진주비빔밥·육전 메뉴 — 진주냉면 대표, match: {title_contains: 하연옥, category: food, near: [35.1948, 128.1162], within_m: 300}}
+  - {key: chokseongnu-restaurant, label: 촉석루(한정식), group: food, reason: 한정식 음식점(진주시 음식점 API), match: {title_contains: 촉석루, category: food, near: [35.1850, 128.0732], within_m: 300}}
+  - {key: jinju-patjuk, label: 진주팥죽, group: food, reason: 팥칼국수·동지팥죽 — 진주 이름의 향토 분식, match: {title_contains: 진주팥죽, category: food, near: [35.1826, 128.1515], within_m: 300}}
+  - {key: central-market, label: 진주중앙시장, group: food, reason: 진주 원도심의 대표 전통시장, match: {title_contains: 진주중앙시장, category: sight, near: [35.1939, 128.0849], within_m: 300}}
+  - {key: nongae-market, label: 진주논개시장, group: food, reason: 원도심 전통시장(중앙시장 인근), match: {title_contains: 진주논개시장, category: sight, near: [35.1951, 128.0872], within_m: 300}}
+  - {key: food-experience, label: 진주전통음식 체험, group: food, reason: 진주 전통음식을 배우는 체험 프로그램, match: {title_contains: 진주전통음식, category: culture, near: [35.2377, 128.0305], within_m: 300}}
+  # ---- 야경 / 체험
+  - {key: namgaram-starlight, label: 남가람 별빛길, group: night, reason: 진주성 맞은편 대숲 야간 산책길(야경), match: {title_contains: 남가람 별빛길, category: sight, near: [35.1872, 128.0822], within_m: 300}}
+  - {key: somang-lantern-park, label: 소망진산유등테마공원, group: night, reason: 유등을 주제로 한 남강변 공원, match: {title_contains: 소망진산유등테마공원, category: sight, near: [35.1830, 128.0780], within_m: 300}}
+  - {key: music-fountain, label: 음악분수, group: night, reason: 진주성 앞 남강 음악분수(야간), match: {title_contains: 음악분수, category: sight, near: [35.1860, 128.0755], within_m: 300}}
+  - {key: kimsimin-boat, label: 김시민호, group: night, reason: 전통 정자선 모양의 남강 유람선, match: {title_contains: 김시민호, category: sight, near: [35.1812, 128.0764], within_m: 300}}
+  - {key: railbike, label: 진주 레일바이크, group: night, reason: 남강변 레일바이크 체험, match: {title_contains: 레일바이크, category: sight, near: [35.1663, 128.0673], within_m: 300}}
+  - {key: lantern-workshop, label: 유등체험관, group: night, reason: 유등 만들기 체험 상시 운영, match: {title_contains: 유등체험관, category: culture, near: [35.1860, 128.0825], within_m: 300}}
