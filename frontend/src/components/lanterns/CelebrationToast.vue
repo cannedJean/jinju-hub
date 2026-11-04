@@ -11,6 +11,7 @@ const toast = ref('')
 const queue = ref([])
 const closeBtn = ref(null)
 let timer = null
+let opener = null
 
 function showToast(text) {
   toast.value = text
@@ -31,6 +32,7 @@ watch(
   async (n) => {
     if (!n) return
     // The first-light badge is already celebrated by the toast above.
+    if (!queue.value.length) opener = document.activeElement
     queue.value.push(...collection.consumeNewlyEarned().filter((b) => b.id !== 'first_light'))
     await nextTick()
     closeBtn.value?.focus()
@@ -40,7 +42,8 @@ watch(
 async function close() {
   queue.value.shift()
   await nextTick()
-  closeBtn.value?.focus()
+  if (queue.value.length) closeBtn.value?.focus()
+  else if (opener?.isConnected) opener.focus()
 }
 
 // One focusable control only: keep focus on it.

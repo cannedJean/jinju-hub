@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 
 vi.mock('../../api/places', () => ({
   fetchPlace: vi.fn(),
+  fetchMarkers: vi.fn(() => Promise.resolve([])),
   fetchCollection: vi.fn(() =>
     Promise.resolve({
       collection_ids: ['jh-a', 'jh-b'],
@@ -14,7 +16,7 @@ vi.mock('../../api/places', () => ({
 vi.mock('../../components/lanterns/LanternMap.vue', () => ({ default: { render: () => null } }))
 
 import LanternsView from '../LanternsView.vue'
-import { fetchPlace } from '../../api/places'
+import { fetchCollection, fetchMarkers, fetchPlace } from '../../api/places'
 import { useLanternsStore } from '../../stores/lanterns'
 import { encodeShare } from '../../utils/share'
 
@@ -99,5 +101,100 @@ describe('LanternsView', () => {
     await w.findAll('button').find((b) => b.text().includes('공유')).trigger('click')
     const input = w.find('input[readonly]')
     expect(input.element.value).toContain('/lanterns?share=' + encodeShare(['jh-a']))
+  })
+
+  const removeBtn = (w) => w.findAll('button').find((b) => b.text().includes('빼기'))
+  const litSave = () => {
+    const lanterns = useLanternsStore()
+    lanterns.save({ id: 'jh-a', title: '촉석루', category: 'sight' })
+    lanterns.light('jh-a', 'gps')
+    return lanterns
+  }
+
+  test('remove then undo restores the lit record', async () => {
+    fetchPlace.mockResolvedValue({ id: 'jh-a', title: '촉석루' })
+    const lanterns = litSave()
+    const litAt = lanterns.items['jh-a'].litAt
+    const { w } = await mountAt('/lanterns')
+    await removeBtn(w).trigger('click')
+    expect(lanterns.isSaved('jh-a')).toBe(false)
+    await w.findAll('button').find((b) => b.text().includes('실행 취소')).trigger('click')
+    expect(lanterns.items['jh-a'].litAt).toBe(litAt)
+    expect(lanterns.items['jh-a'].litMethod).toBe('gps')
+  })
+
+  test('remove then timeout keeps it removed', async () => {
+    fetchPlace.mockResolvedValue({ id: 'jh-a', title: '촉석루' })
+    const lanterns = litSave()
+    const { w } = await mountAt('/lanterns')
+    vi.useFakeTimers()
+    try {
+      await removeBtn(w).trigger('click')
+      expect(w.text()).toContain('실행 취소')
+      vi.advanceTimersByTime(5100)
+      await nextTick()
+      expect(w.text()).not.toContain('실행 취소')
+      expect(lanterns.isSaved('jh-a')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('tombstone checks respect the concurrency cap', async () => {
+    const lanterns = useLanternsStore()
+    for (let i = 0; i < 12; i++) lanterns.save({ id: `jh-${i}`, title: `T${i}` })
+    let active = 0
+    let max = 0
+    fetchPlace.mockImplementation((id) => {
+      active++
+      max = Math.max(max, active)
+      return new Promise((r) => setTimeout(() => (active--, r({ id })), 5))
+    })
+    await mountAt('/lanterns')
+    await new Promise((r) => setTimeout(r, 100))
+    expect(fetchPlace).toHaveBeenCalledTimes(12)
+    expect(max).toBeLessThanOrEqual(4)
+  })
+
+  test('places present in markers are not fetched individually', async () => {
+    fetchMarkers.mockResolvedValueOnce([{ id: 'jh-a', title: 'A', lat: 35.1, lng: 128.1, category: 'sight' }])
+    useLanternsStore().save({ id: 'jh-a', title: 'A' })
+    await mountAt('/lanterns')
+    expect(fetchPlace).not.toHaveBeenCalled()
+  })
+
+  test('5xx is not a tombstone and is retried on the next visit', async () => {
+    useLanternsStore().save({ id: 'jh-a', title: 'A' })
+    fetchPlace.mockRejectedValueOnce({ response: { status: 503 } })
+    const first = await mountAt('/lanterns')
+    expect(first.w.text()).not.toContain('더 이상 제공되지 않는 장소')
+    first.w.unmount()
+    fetchPlace.mockResolvedValueOnce({ id: 'jh-a', title: 'A' })
+    await mountAt('/lanterns')
+    expect(fetchPlace).toHaveBeenCalledTimes(2)
+  })
+
+  test('collection load failure shows message and retry succeeds', async () => {
+    fetchCollection.mockRejectedValueOnce(new Error('boom'))
+    const { w } = await mountAt('/lanterns')
+    expect(w.text()).toContain('배지 정보를 불러오지 못했어요')
+    await w.findAll('button').find((b) => b.text().includes('다시 시도')).trigger('click')
+    await flushPromises()
+    expect(w.text()).not.toContain('배지 정보를 불러오지 못했어요')
+  })
+
+  test('retry after failed collection load awards badges', async () => {
+    fetchCollection.mockRejectedValueOnce(new Error('boom'))
+    litSave()
+    const { w } = await mountAt('/lanterns')
+    await w.findAll('button').find((b) => b.text().includes('다시 시도')).trigger('click')
+    await flushPromises()
+    expect(useLanternsStore().earnedBadges.first_light).toBeTruthy()
+  })
+
+  test('shared list with all fetches failing shows an error state', async () => {
+    fetchPlace.mockRejectedValue({ response: { status: 500 } })
+    const { w } = await mountAt('/lanterns?share=' + encodeShare(['jh-a']))
+    expect(w.text()).toContain('공유받은 목록을 불러오지 못했어요')
   })
 })

@@ -9,10 +9,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['remove', 'select'])
 
-function remove(it) {
-  if (it.litAt && !window.confirm('밝힌 유등 기록도 함께 지워져요. 빼시겠어요?')) return
-  emit('remove', it.id)
-}
+// Removal is immediate; the page offers an undo snackbar.
+const remove = (it) => emit('remove', it.id)
 const asPlace = (it) => ({ id: it.id, title: it.title, category: it.category, lat: it.lat, lng: it.lng })
 </script>
 
@@ -24,7 +22,7 @@ const asPlace = (it) => ({ id: it.id, title: it.title, category: it.category, la
           <p class="font-extrabold text-strong truncate">{{ it.title }}</p>
           <p class="text-[13px] text-muted">더 이상 제공되지 않는 장소</p>
         </div>
-        <button v-if="!readonly" type="button" class="saved-row__remove" @click="emit('remove', it.id)">
+        <button v-if="!readonly" type="button" class="saved-row__remove" @click="remove(it)">
           빼기<span class="sr-only"> {{ it.title }}</span>
         </button>
       </div>

@@ -60,6 +60,12 @@ export const useLanternsStore = defineStore('lanterns', {
       })
       this.persist()
     },
+    // Undo for unsave: puts back the full snapshot (incl. lit fields).
+    restore(item) {
+      if (!item?.id || this.items[item.id]) return
+      this.items[item.id] = { ...item }
+      this.persist()
+    },
     setBase(base) {
       this.base = base
       this.persist()

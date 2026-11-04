@@ -1,6 +1,8 @@
 <script setup>
 // Badge shelf: one card per evaluated badge ({id,label,description,required,progress,earned}).
 defineProps({ badges: { type: Array, default: () => [] } })
+const req = (b) => Math.max(1, Number(b.required) || 1)
+const cur = (b) => Math.min(Math.max(0, b.progress || 0), req(b))
 </script>
 
 <template>
@@ -24,12 +26,12 @@ defineProps({ badges: { type: Array, default: () => [] } })
           role="progressbar"
           :aria-label="`${b.label} 진행도`"
           aria-valuemin="0"
-          :aria-valuemax="b.required"
-          :aria-valuenow="Math.min(b.progress, b.required)"
+          :aria-valuemax="req(b)"
+          :aria-valuenow="cur(b)"
         >
-          <span class="badge__fill" :style="{ width: `${Math.min(100, (b.progress / b.required) * 100)}%` }"></span>
+          <span class="badge__fill" :style="{ width: `${(cur(b) / req(b)) * 100}%` }"></span>
         </div>
-        <p class="badge__count">{{ Math.min(b.progress, b.required) }}/{{ b.required }}</p>
+        <p class="badge__count">{{ cur(b) }}/{{ req(b) }}</p>
       </div>
     </li>
   </ul>
