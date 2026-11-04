@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     city_min_interval: float = 0.25
     tour_concurrency: int = 5
     gate_min_first_run: int = 300
+
+    @field_validator("data_go_kr_key", mode="before")
+    @classmethod
+    def _blank_secret_is_unset(cls, v):
+        # `DATA_GO_KR_KEY=` (empty template line) or whitespace must behave like an unset key.
+        if isinstance(v, str) and not v.strip():
+            return None
+        if isinstance(v, SecretStr) and not v.get_secret_value().strip():
+            return None
+        return v
 
 
 @lru_cache
