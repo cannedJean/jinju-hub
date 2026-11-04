@@ -127,10 +127,13 @@ async def fetch_json(
         if status >= 400:
             raise UpstreamError(f"HTTP {status}: {resp.text[:200]}", status=status, retryable=False)
         try:
-            return resp.json()
+            body = resp.json()
         except ValueError:
             _raise_for_non_json(resp.text, status)
             raise  # unreachable
+        if not isinstance(body, dict):
+            raise UpstreamError(f"unexpected JSON type: {resp.text[:200]}", status=status, retryable=False)
+        return body
 
     retrying = tenacity.AsyncRetrying(
         stop=tenacity.stop_after_attempt(max_attempts),

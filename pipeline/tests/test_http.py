@@ -195,3 +195,10 @@ async def test_make_client_defaults():
     async with make_client() as c:
         assert c.headers["user-agent"] == "JinjuHub-pipeline/0.1 (education project)"
         assert c.follow_redirects is True
+
+
+async def test_non_dict_json_is_upstream_error():
+    async with _client(lambda req: httpx.Response(200, json=[1, 2])) as c:
+        with pytest.raises(UpstreamError) as ei:
+            await fetch_json(c, "https://x", {}, limiter=RateLimiter(2, 0), wait=tenacity.wait_none())
+    assert ei.value.retryable is False
