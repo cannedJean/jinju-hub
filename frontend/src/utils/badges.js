@@ -24,7 +24,7 @@ export function evaluateBadges(state, collection) {
       )
       progress = hit ? 1 : 0
     }
-    const required = b.required ?? 1
+    const required = b.required >= 1 ? b.required : 1
     return {
       id: b.id,
       label: b.label,

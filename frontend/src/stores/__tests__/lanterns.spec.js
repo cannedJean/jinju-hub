@@ -60,6 +60,34 @@ describe('lanterns store', () => {
     expect(s.isLit('jh-new')).toBe(true)
     expect(s.isSaved('jh-old')).toBe(false)
   })
+  test('migrateId merges: old lit, new only saved keeps lit fields', () => {
+    const s = useLanternsStore()
+    s.light('jh-old', 'gps', { ...P, id: 'jh-old' }); s.save({ ...P, id: 'jh-new' })
+    const oldLitAt = s.items['jh-old'].litAt
+    s.migrateId('jh-old', 'jh-new')
+    expect(s.isSaved('jh-old')).toBe(false)
+    expect(s.items['jh-new']).toMatchObject({ id: 'jh-new', litAt: oldLitAt, litMethod: 'gps' })
+  })
+  test('light on already-lit place keeps first litOn', () => {
+    const s = useLanternsStore()
+    s.setDemo({ enabled: true, today: '2026-10-10', pos: null }); s.light('jh-1', 'demo', P)
+    s.setDemo({ enabled: true, today: '2026-10-12', pos: null }); s.light('jh-1', 'demo', P)
+    expect(s.items['jh-1'].litOn).toBe('2026-10-10')
+  })
+  test('invalid persisted entries do not crash', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, items: { a: null, b: { id: 'b', savedAt: 5, litAt: {} }, c: 'x' } }))
+    const s = useLanternsStore()
+    expect(s.litCount).toBe(0)
+    expect(s.savedList.map((x) => x.id)).toEqual(['b'])
+    s.save(P)
+    expect(s.savedList).toHaveLength(2)
+  })
+  test('storageAvailable false when initial storage access throws', () => {
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
+    const s = useLanternsStore()
+    expect(s.storageAvailable).toBe(false)
+    spy.mockRestore()
+  })
   test('importShared saves unknown ids, keeps existing', () => {
     const s = useLanternsStore()
     s.light('jh-1', 'gps', P)

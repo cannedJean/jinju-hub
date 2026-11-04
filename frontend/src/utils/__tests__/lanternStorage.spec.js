@@ -30,6 +30,12 @@ describe('lanternStorage', () => {
     expect(st.demo).toEqual({ enabled: false, today: null, pos: null })
     expect(st.earnedBadges).toEqual({})
   })
+  test('loadState drops null/non-object entries and normalizes field types', () => {
+    const s = fakeStorage({ [STORAGE_KEY]: JSON.stringify({ version: 1, items: { a: null, b: 'x', c: { savedAt: 3, litAt: 4, litOn: [] } } }) })
+    const st = loadState(s)
+    expect(Object.keys(st.items)).toEqual(['c'])
+    expect(st.items.c).toMatchObject({ id: 'c', savedAt: null, litAt: null, litOn: null })
+  })
   test('save then load roundtrip', () => {
     const s = fakeStorage()
     const st = { ...emptyState(), base: { lat: 1, lng: 2, label: 'x' } }

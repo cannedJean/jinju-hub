@@ -13,6 +13,10 @@ describe('share', () => {
   test('drops non jh- entries', () => {
     expect(decodeShare(encodeShare(['jh-1', 'evil', '<script>']))).toEqual(['jh-1'])
   })
+  test('dedupes, validates id charset, caps input length', () => {
+    expect(decodeShare(encodeShare(['jh-1', 'jh-1', 'jh-a b', 'jh-cur-3']))).toEqual(['jh-1', 'jh-cur-3'])
+    expect(decodeShare('A'.repeat(5000))).toEqual([])
+  })
   test('caps at 100', () => {
     const ids = Array.from({ length: 150 }, (_, i) => `jh-${i}`)
     expect(decodeShare(encodeShare(ids))).toHaveLength(100)

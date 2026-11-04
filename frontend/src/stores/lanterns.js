@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { loadState, saveState } from '../utils/lanternStorage'
+import { loadState, saveState, storageReadable } from '../utils/lanternStorage'
 
 // KST (Asia/Seoul) calendar date as YYYY-MM-DD. `now` is injectable for tests.
 export function kstToday(now = new Date()) {
@@ -21,7 +21,7 @@ const snapshot = (p) => ({
 })
 
 export const useLanternsStore = defineStore('lanterns', {
-  state: () => ({ ...loadState(), storageAvailable: true }),
+  state: () => ({ ...loadState(), storageAvailable: storageReadable() }),
   getters: {
     isSaved: (s) => (id) => !!s.items[id],
     isLit: (s) => (id) => !!s.items[id]?.litAt,
@@ -52,6 +52,7 @@ export const useLanternsStore = defineStore('lanterns', {
     },
     light(id, method, summary) {
       if (!this.items[id]) this._put(summary || { id, title: id })
+      if (this.items[id].litAt) return
       Object.assign(this.items[id], {
         litAt: new Date().toISOString(),
         litOn: this.effectiveToday,
@@ -75,7 +76,19 @@ export const useLanternsStore = defineStore('lanterns', {
     migrateId(oldId, newId) {
       const it = this.items[oldId]
       if (!it || oldId === newId) return
-      if (!this.items[newId]) this.items[newId] = { ...it, id: newId }
+      const cur = this.items[newId]
+      if (!cur) {
+        this.items[newId] = { ...it, id: newId }
+      } else {
+        const merged = { ...cur }
+        if (it.savedAt && (!cur.savedAt || it.savedAt < cur.savedAt)) merged.savedAt = it.savedAt
+        if (it.litAt && (!cur.litAt || it.litAt < cur.litAt)) {
+          merged.litAt = it.litAt
+          merged.litOn = it.litOn
+          merged.litMethod = it.litMethod
+        }
+        this.items[newId] = merged
+      }
       delete this.items[oldId]
       this.persist()
     },

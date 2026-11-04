@@ -20,6 +20,35 @@ function defaultStorage() {
   }
 }
 
+const str = (v) => (typeof v === 'string' ? v : null)
+
+// Keep only object entries with a usable id; normalize timestamp fields to string|null.
+function cleanItems(items) {
+  const out = {}
+  for (const [key, it] of Object.entries(items)) {
+    if (!isObj(it)) continue
+    const id = typeof it.id === 'string' && it.id ? it.id : key
+    out[key] = {
+      ...it,
+      id,
+      tags: Array.isArray(it.tags) ? it.tags : [],
+      savedAt: str(it.savedAt),
+      litAt: str(it.litAt),
+      litOn: str(it.litOn),
+    }
+  }
+  return out
+}
+
+export function storageReadable(storage = defaultStorage()) {
+  try {
+    storage.getItem(STORAGE_KEY)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Never throws: missing / corrupted / wrong-version / inaccessible storage -> emptyState().
 export function loadState(storage = defaultStorage()) {
   try {
@@ -30,7 +59,7 @@ export function loadState(storage = defaultStorage()) {
     const base = emptyState()
     return {
       version: 1,
-      items: data.items,
+      items: cleanItems(data.items),
       base: isObj(data.base) ? data.base : null,
       demo: { ...base.demo, ...(isObj(data.demo) ? data.demo : {}) },
       earnedBadges: isObj(data.earnedBadges) ? data.earnedBadges : {},

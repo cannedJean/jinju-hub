@@ -45,6 +45,12 @@ describe('evaluateBadges', () => {
     expect(byId(evaluateBadges(stateLit(['v'], '2026-11-04'), c)).festival_guest.earned).toBe(false)
     expect(byId(evaluateBadges(stateLit(['other'], '2026-10-10'), c)).festival_guest.earned).toBe(false)
   })
+  test('required 0 or missing is treated as at least 1', () => {
+    const c = { badges: [{ id: 'jinju8', required: 0, eligible_place_ids: ['a'] }, { id: 'food_explorer', eligible_place_ids: ['a'] }] }
+    const r = byId(evaluateBadges(stateLit([]), c))
+    expect(r.jinju8).toMatchObject({ required: 1, earned: false })
+    expect(r.food_explorer.earned).toBe(false)
+  })
   test('handles empty/missing collection', () => {
     expect(evaluateBadges({ items: {} }, null)).toEqual([])
     expect(evaluateBadges({ items: {} }, {})).toEqual([])
