@@ -2,10 +2,12 @@
 import json
 import math
 import sqlite3
+import threading
 from datetime import date
+from functools import wraps
 from pathlib import Path
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from app.schemas.places import (
     BadgeOut, CategoryCount, CollectionOut, CollectionPlace, ImageOut, Jinju8Item, Marker, MetaOut,
@@ -53,8 +55,24 @@ def _deg_box(lat: float, meters: float) -> tuple[float, float]:
     return meters / _M_PER_DEG, meters / (_M_PER_DEG * max(math.cos(math.radians(lat)), 1e-6))
 
 
+def _locked(fn):
+    @wraps(fn)
+    def wrapper(self, *a, **kw):
+        with self._lock:
+            return fn(self, *a, **kw)
+    return wrapper
+
+
 class PlacesRepo:
+    """Read-only places.db access.
+
+    Threading model: one sqlite connection is shared (check_same_thread=False) by the FastAPI threadpool
+    workers. Every public query method holds a re-entrant lock for its whole run, so queries are serialized
+    and cursors never interleave. The DB is small and read-only, so contention is negligible.
+    """
+
     def __init__(self, db_path: Path, report_path: Path | None = None):
+        self._lock = threading.RLock()
         self._con = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True, check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self.report_path = report_path
@@ -63,7 +81,8 @@ class PlacesRepo:
         self.last_search_mode: str | None = None
 
     def close(self) -> None:
-        self._con.close()
+        with self._lock:
+            self._con.close()
 
     def _meta(self, key, default=None):
         row = self._con.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
@@ -78,6 +97,7 @@ class PlacesRepo:
             distance_m=None if distance is None else round(distance),
         )
 
+    @_locked
     def meta(self) -> MetaOut:
         counts = _loads(self._meta("category_counts"), {})
         return MetaOut(
@@ -88,6 +108,7 @@ class PlacesRepo:
             generated_at=self._meta("generated_at", ""),
         )
 
+    @_locked
     def search(self, q: PlaceQuery) -> PlacePage:
         tokens = (q.q or "").split()
         where: list[str] = []
@@ -167,6 +188,7 @@ class PlacesRepo:
         return PlacePage(items=items, total=total, page=q.page, size=q.size,
                          totalPages=math.ceil(total / q.size) if total else 0)
 
+    @_locked
     def markers(self, categories: list[str] | None) -> list[Marker]:
         sql = ("SELECT id, lat, lng, category, title, is_collection FROM places "
                "WHERE lat IS NOT NULL AND lng IS NOT NULL")
@@ -190,6 +212,7 @@ class PlacesRepo:
             cur = row[0]
         return None
 
+    @_locked
     def get(self, place_id: str) -> PlaceDetail | None:
         cid = self._resolve(place_id)
         if cid is None:
@@ -217,6 +240,7 @@ class PlacesRepo:
         scored = sorted(((_haversine_m(lat, lng, x["lat"], x["lng"]), x) for x in rows), key=lambda t: t[0])
         return [self._summary(x, d) for d, x in scored if d <= _NEARBY_M][:_NEARBY_N]
 
+    @_locked
     def collection(self) -> CollectionOut:
         rows = self._con.execute(
             "SELECT id, category, title, tags, jinju8_rank FROM places "
@@ -233,6 +257,7 @@ class PlacesRepo:
             collection_ids=[r["id"] for r in rows], jinju8=jinju8, badges=badges,
             places=[CollectionPlace(id=r["id"], category=r["category"], tags=_loads(r["tags"], [])) for r in rows])
 
+    @_locked
     def festival_rows(self) -> list[dict]:
         programs = _loads(self._meta("festival_programs"), {})
         out = []
@@ -257,10 +282,26 @@ class PlacesRepo:
             return None
 
 
+_REPO_INIT_LOCK = threading.Lock()
+
+
+def open_places_repo(settings) -> PlacesRepo:
+    """Open the repo from settings; raise 503 data_unavailable when the DB is missing or unreadable."""
+    try:
+        if not Path(settings.places_db_path).is_file():
+            raise FileNotFoundError(settings.places_db_path)
+        return PlacesRepo(settings.places_db_path, settings.report_path)
+    except (OSError, sqlite3.Error):
+        raise HTTPException(status_code=503, detail="data_unavailable") from None
+
+
 def get_places_repo(request: Request) -> PlacesRepo:
-    """FastAPI dependency: one read-only repo per app, built lazily from app.state.settings."""
-    repo = getattr(request.app.state, "places_repo", None)
+    """FastAPI dependency: one repo per app (built eagerly by the lifespan, lazily here as a locked fallback)."""
+    state = request.app.state
+    repo = getattr(state, "places_repo", None)
     if repo is None:
-        s = request.app.state.settings
-        repo = request.app.state.places_repo = PlacesRepo(s.places_db_path, s.report_path)
+        with _REPO_INIT_LOCK:
+            repo = getattr(state, "places_repo", None)
+            if repo is None:
+                repo = state.places_repo = open_places_repo(state.settings)
     return repo

@@ -36,10 +36,17 @@ def fixture_data_version() -> str:
 
 @pytest.fixture
 def make_client():
-    """Build a TestClient whose app uses Settings(_env_file=None, **overrides)."""
+    """Build a started TestClient (lifespan runs, repo closed on teardown) with Settings(_env_file=None, **overrides)."""
     from app.main import create_app
 
-    def _make(**overrides) -> TestClient:
-        return TestClient(create_app(Settings(_env_file=None, **overrides)), raise_server_exceptions=False)
+    clients = []
 
-    return _make
+    def _make(**overrides) -> TestClient:
+        c = TestClient(create_app(Settings(_env_file=None, **overrides)), raise_server_exceptions=False)
+        c.__enter__()
+        clients.append(c)
+        return c
+
+    yield _make
+    for c in clients:
+        c.__exit__(None, None, None)

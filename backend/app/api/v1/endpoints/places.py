@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from app.schemas.places import Marker, PlaceDetail, PlacePage, PlaceQuery
 from app.services.places_repo import PlacesRepo, get_places_repo
@@ -41,15 +41,25 @@ def list_places(query: PlaceQuery = Depends(place_query), repo: PlacesRepo = Dep
     return repo.search(query)
 
 
+def _etag_matches(header: str | None, etag: str) -> bool:
+    if not header:
+        return False
+    tags = [t.strip().removeprefix("W/") for t in header.split(",")]
+    return "*" in tags or etag in tags
+
+
 # Registered before /places/{place_id} so "markers" is not captured as an id.
 @router.get("/places/markers", response_model=list[Marker])
 def list_markers(
+    request: Request,
     response: Response,
     category: Annotated[list[str] | None, Query()] = None,
     repo: PlacesRepo = Depends(get_places_repo),
 ):
-    response.headers["Cache-Control"] = "public, max-age=600"
-    response.headers["ETag"] = repo.meta().data_version
+    headers = {"Cache-Control": "public, max-age=600", "ETag": f'"{repo.meta().data_version}"'}
+    if _etag_matches(request.headers.get("if-none-match"), headers["ETag"]):
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
     return repo.markers(category or None)
 
 

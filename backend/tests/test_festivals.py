@@ -7,20 +7,12 @@ from app.services.festival_status import kst_today, festival_status
 
 @pytest.fixture
 def client(make_client, fixture_db_path):
-    c = make_client(places_db_path=fixture_db_path)
-    yield c
-    repo = getattr(c.app.state, "places_repo", None)
-    if repo:
-        repo.close()
+    return make_client(places_db_path=fixture_db_path)
 
 
 @pytest.fixture
 def client_no_demo(make_client, fixture_db_path):
-    c = make_client(places_db_path=fixture_db_path, demo_date_override_enabled=False)
-    yield c
-    repo = getattr(c.app.state, "places_repo", None)
-    if repo:
-        repo.close()
+    return make_client(places_db_path=fixture_db_path, demo_date_override_enabled=False)
 
 
 @pytest.mark.parametrize("s,e,u,today,exp", [
@@ -74,3 +66,9 @@ def test_filter_and_ordering(client):
 def test_bad_params_422(client):
     assert client.get("/api/festivals?status=nope").status_code == 422
     assert client.get("/api/festivals?today=garbage").status_code == 422
+
+
+def test_invalid_today_with_override_disabled_is_422(client_no_demo):
+    # Chosen behaviour: `today` is validated as a date regardless of the flag, so a malformed value is a
+    # deterministic 422 (never silently ignored); a well-formed value is ignored when the override is off.
+    assert client_no_demo.get("/api/festivals?today=garbage").status_code == 422
