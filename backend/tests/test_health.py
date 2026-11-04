@@ -40,3 +40,21 @@ def test_cors_only_allowed_origins(make_client, tmp_path):
     bad = client.get("/api/health", headers={"Origin": "http://evil.test"})
     assert ok.headers.get("access-control-allow-origin") == "http://ok.test"
     assert "access-control-allow-origin" not in bad.headers
+
+
+def test_tests_never_load_dotenv(tmp_path, monkeypatch, make_client):
+    import sys
+
+    (tmp_path / ".env").write_text("WEATHER_API_KEY=SENTINEL\n")
+    monkeypatch.chdir(tmp_path)
+    client = make_client(places_db_path=tmp_path / "m.db")
+    assert client.app.state.settings.weather_api_key is None
+    # importing app.main must not build the module-level app (which would read .env)
+    assert "app" not in vars(sys.modules["app.main"])
+
+
+def test_blank_secret_from_env(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("WEATHER_API_KEY", "   ")
+    s = Settings(_env_file=None)
+    assert s.anthropic_api_key is None and s.weather_api_key is None

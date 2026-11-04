@@ -30,6 +30,14 @@ class SecretMaskFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = mask_secrets(record.getMessage())
         record.args = None
+        if record.exc_info:
+            # Formatter appends exc_text later; render and mask it here so tracebacks cannot leak keys.
+            record.exc_text = mask_secrets(logging.Formatter().formatException(record.exc_info))
+            record.exc_info = None
+        elif record.exc_text:
+            record.exc_text = mask_secrets(record.exc_text)
+        if record.stack_info:
+            record.stack_info = mask_secrets(record.stack_info)
         return True
 
 

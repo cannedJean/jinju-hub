@@ -24,4 +24,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-app = create_app()
+def __getattr__(name: str):
+    # Lazy `app` so importing app.main (tests) never loads Settings/.env; `uvicorn main:app` still works.
+    if name == "app":
+        global app
+        app = create_app()
+        return app
+    raise AttributeError(name)

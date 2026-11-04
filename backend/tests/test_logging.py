@@ -45,3 +45,26 @@ def test_unhandled_error_returns_500_json(make_client, tmp_path, caplog):
     assert r.status_code == 500
     assert r.json() == {"detail": "internal_error"}
     assert "secret detail" not in r.text
+
+
+def test_exc_info_traceback_is_masked():
+    import io
+
+    stream = io.StringIO()
+    h = logging.StreamHandler(stream)
+    h.setFormatter(logging.Formatter("%(message)s"))
+    h.addFilter(SecretMaskFilter())
+    lg = logging.getLogger("jinjuhub.exc_test")
+    lg.propagate = False
+    lg.addHandler(h)
+    try:
+        try:
+            raise RuntimeError("GET https://x/y?serviceKey=SECRETA&authKey=SECRETB failed sk-ant-api03-SECRETC")
+        except RuntimeError:
+            lg.error("boom", exc_info=True)
+    finally:
+        lg.removeHandler(h)
+    out = stream.getvalue()
+    assert "RuntimeError" in out and "Traceback" in out
+    for s in ("SECRETA", "SECRETB", "SECRETC"):
+        assert s not in out
