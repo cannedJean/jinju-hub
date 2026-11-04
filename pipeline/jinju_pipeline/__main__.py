@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Mapping
 
 import httpx
+from pydantic import ValidationError
 
 from jinju_pipeline.http import ConfigError, make_client
 from jinju_pipeline.raw_store import KST
@@ -55,7 +56,11 @@ def _err(msg: str) -> None:
 
 def _cmd_run(args, settings: Settings, transport) -> int:
     if args.out is not None:
-        settings = settings.model_copy(update={"output_db": args.out, "output_report": args.out.parent / "report.json"})
+        settings = settings.model_copy(update={
+            "previous_db": settings.previous_db or settings.output_db,  # still the canonical snapshot
+            "output_db": args.out,
+            "output_report": args.out.parent / "report.json",
+        })
     now = datetime.now(KST)
     today = args.today or now.date()
     report, gate = asyncio.run(run_pipeline(
@@ -102,7 +107,11 @@ def main(argv: list[str] | None = None, *, settings: Settings | None = None,
          transport: httpx.AsyncBaseTransport | None = None) -> int:
     """``settings``/``transport`` are injection points for tests (default: env settings, real network)."""
     args = _parser().parse_args(argv)
-    settings = settings_for_env(settings or get_settings(), os.environ)
+    try:
+        settings = settings_for_env(settings or get_settings(), os.environ)
+    except ValidationError as e:  # bad env/.env values
+        _err(f"설정 오류: {e}")
+        return 2
     try:
         if args.cmd == "run":
             return _cmd_run(args, settings, transport)

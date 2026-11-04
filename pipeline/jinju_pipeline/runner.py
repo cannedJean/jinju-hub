@@ -69,7 +69,7 @@ async def run_pipeline(
     run_id = new_run_id(now)
     work = Path(settings.work_dir) / run_id
     region = load_region(settings.region_path)
-    previous = read_previous(settings.output_db)
+    previous = read_previous(settings.previous_db or settings.output_db)
     cur = load_curation(settings.curation_dir)
 
     ledger = QuotaLedger(Path(settings.state_dir) / "quota.json", settings.daily_quota, settings.run_quota,

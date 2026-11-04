@@ -159,4 +159,5 @@ def test_coords_thresholds_per_category(tmp_path):
     assert any("culture" in f and "0.55" in f for f in g.failures)
     assert any("stay" in f and "0.4" in f for f in g.failures)
     write_report(rep, g, tmp_path / "r.json", tmp_path / "r.md")
-    assert "culture ≥ 0.55" in (tmp_path / "r.md").read_text(encoding="utf-8")
+    md = (tmp_path / "r.md").read_text(encoding="utf-8")
+    assert "culture ≥ 0.55" in md and "회귀 감시선" in md

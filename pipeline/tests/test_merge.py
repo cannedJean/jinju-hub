@@ -151,3 +151,36 @@ def test_city_tourism_listing_names_a_merged_temple():
               source="jinju_city.heritage", source_id="500")
     p = M([art, temple]).places[0]
     assert p.title == "청곡사" and p.category == "sight" and len(p.sources) == 2
+
+
+def test_one_place_on_three_sources_keeps_phone_evidence():
+    # A festival listed by the city, TourAPI area (type 15) and TourAPI festival: three records, one number.
+    recs = [
+        rec("진주남강유등축제", 35.1896, 128.0800, cat="festival", phone="055-761-9111",
+            source="jinju_city.festival", source_id="660"),
+        rec("남강 유등 페스티벌 2026", 35.1910, 128.0820, cat="festival", phone="0557619111",
+            source="tourapi.area", source_id="2500001"),
+        rec("Jinju Lantern Fest", 35.1880, 128.0790, cat="festival", phone="055-761-9111",
+            source="tourapi.festival", source_id="2500001"),
+    ]
+    res = M(recs)
+    assert len(res.places) == 1 and {e["reason"] for e in res.log} == {"same_phone"}
+
+
+def test_shared_phone_boundary_through_merge_records():
+    two = [rec("가나식당", 35.19, 128.08, cat="food", phone="055-741-1234", source_id="r1",
+               source="jinju_city.restaurant"),
+           rec("전혀다른이름", 35.192, 128.082, cat="food", phone="055-741-1234", source="tourapi.area",
+               source_id="t1")]
+    assert len(M(two).places) == 1
+    # the same number on 3 distinct records of one source is a department line: no phone merges at all
+    dept = [rec(f"관광지{i}", 35.19 + i * 0.004, 128.08, phone="055-749-5355", source_id=f"c{i}")
+            for i in range(3)]
+    tour = rec("다른 이름 명소", 35.19, 128.08, phone="055-749-5355", source="tourapi.area", source_id="t9")
+    assert len(M(dept + [tour]).places) == 4
+    # duplicates of one record (same idx on two pages) do not count as distinct records
+    dup = [rec("관광지A", 35.19, 128.08, phone="055-749-1111", source_id="c1"),
+           rec("관광지A", 35.19, 128.08, phone="055-749-1111", source_id="c1"),
+           rec("관광지B", 35.1905, 128.0805, phone="055-749-1111", source_id="c2")]
+    tour2_ = rec("완전히 다른 이름", 35.1902, 128.0802, phone="055-749-1111", source="tourapi.area", source_id="t2")
+    assert len(M(dup + [tour2_]).places) == 1

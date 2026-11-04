@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     curation_dir: Path = PIPELINE_ROOT / "curation"
     output_db: Path = REPO_ROOT / "backend" / "app" / "data" / "places.db"
     output_report: Path = REPO_ROOT / "backend" / "app" / "data" / "report.json"
+    # Previous snapshot (ID inheritance, aliases, 80% gate). None = output_db. `run --out` keeps it on the
+    # canonical db so writing elsewhere (e.g. while the backend locks places.db) loses nothing.
+    previous_db: Path | None = None
     daily_quota: int = 900
     run_quota: int | None = None
     city_concurrency: int = 4

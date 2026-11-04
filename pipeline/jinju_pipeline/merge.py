@@ -5,7 +5,7 @@ import hashlib
 import math
 import re
 import unicodedata
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,7 +21,7 @@ FIELD_PRIORITY = {
     "start_date/end_date": "CITY>tourapi.festival>tourapi.area",
 }
 SAME_NAME_M, FUZZY_M, PHONE_M = 300.0, 150.0, 500.0
-SHARED_PHONE_MIN = 3  # a number on this many records is a department/office line, not a place
+SHARED_PHONE_MIN = 3  # a number on this many distinct records of ONE source is a department/office line
 GRID = 0.006  # degrees (~550m lat / ~490m lng): a 3x3 neighbourhood covers 500m
 _PREFIXES = ("경상남도", "경남", "진주")
 _SUFFIX = "본점"
@@ -93,6 +93,18 @@ def match_reason(a: CleanRecord, b: CleanRecord, shared_phones: frozenset[str] =
     if pa and pa == _digits(b.phone) and a.source != b.source and pa not in shared_phones and d <= PHONE_M:
         return "same_phone"
     return None
+
+
+def _shared_phones(records: list[CleanRecord]) -> frozenset[str]:
+    """Numbers that one source lists on >= SHARED_PHONE_MIN distinct records (by key).
+
+    Counting per source keeps a single place's own number usable even when the place appears in
+    several sources (city + tourapi.area + tourapi.festival) or twice on the city API's pages."""
+    keys: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for r in records:
+        if (d := _digits(r.phone)):
+            keys[(r.source, d)].add(r.key)
+    return frozenset(d for (_, d), ks in keys.items() if len(ks) >= SHARED_PHONE_MIN)
 
 
 def load_overrides(path) -> dict:
@@ -255,8 +267,7 @@ def merge_records(records: list[CleanRecord], overrides: dict, previous: Previou
         if a in idx and b in idx and uf.find(idx[a]) != uf.find(idx[b]):
             uf.union(idx[a], idx[b])
             log.append({"a": a, "b": b, "reason": "force_merge", "override": True})
-    phone_counts = Counter(d for d in (_digits(r.phone) for r in records) if d)
-    shared_phones = frozenset(p for p, n in phone_counts.items() if n >= SHARED_PHONE_MIN)
+    shared_phones = _shared_phones(records)
     for i, j in _candidate_pairs(records):
         if uf.find(i) == uf.find(j):
             continue

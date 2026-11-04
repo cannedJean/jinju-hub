@@ -185,6 +185,8 @@ def write_report(report: dict, gate: GateResult, json_path: Path, md_path: Path)
     md += ["## 게이트 / Gate", "", f"**{'PASS' if gate.passed else 'FAIL'}**", ""]
     thresholds = report.get("coords_thresholds") or COORDS_MIN_BY_CATEGORY
     md += ["- 좌표 보유율 기준(첫 실데이터 후 조정, DATA.md 참조): "
-           + ", ".join(f"{c} ≥ {v:.2f}" for c, v in thresholds.items()), ""]
+           + ", ".join(f"{c} ≥ {v:.2f}" for c, v in thresholds.items()),
+           "  - 근거: 2026-11-04 첫 실행(진주시 API만) sight 0.98 · culture 0.65 · stay 0.48 — 좌표 없는 문화재(묘·비석)·"
+           "모텔이 많아 culture/stay는 그보다 약 10%p 낮춘 회귀 감시선(스펙 시작값 0.85)", ""]
     md += [f"- FAIL: {f}" for f in gate.failures] + [f"- WARN: {w}" for w in gate.warnings]
     md_path.write_text("\n".join(md) + "\n", encoding="utf-8")

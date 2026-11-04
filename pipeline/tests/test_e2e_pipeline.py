@@ -133,3 +133,36 @@ def test_cli_report_prints_markdown(tmp_settings, recorded_transport, capsys):
 @pytest.mark.parametrize("env, expected", [({"GITHUB_ACTIONS": "true"}, 300), ({}, None)])
 def test_runner_environment_caps_run_quota(tmp_settings, env, expected):
     assert settings_for_env(tmp_settings, env).run_quota == expected
+
+
+def test_cli_out_still_reads_previous_from_canonical_db(tmp_settings, recorded_transport,
+                                                       transport_returning_few, tmp_path):
+    # --out is the workaround for a locked places.db: ids, aliases and the 80% gate must still come from it.
+    asyncio.run(run_pipeline(tmp_settings, incremental=False, today=TODAY, now=NOW, transport=recorded_transport))
+    keep = all_ids(tmp_settings.output_db)[0]
+    with closing(sqlite3.connect(tmp_settings.output_db)) as con:
+        con.execute("insert into place_aliases values ('jh-gone000001', ?)", (keep,))
+        con.commit()
+        first_order = dict(con.execute("select place_id, issued_seq from id_order"))
+    alt = tmp_path / "alt" / "places.db"
+    assert main(["run", "--out", str(alt)], settings=tmp_settings, transport=recorded_transport) == 0
+    with closing(sqlite3.connect(alt)) as con:
+        assert dict(con.execute("select old_id, new_id from place_aliases")) == {"jh-gone000001": keep}
+        alt_order = dict(con.execute("select place_id, issued_seq from id_order"))
+    assert alt_order == first_order
+    assert all_ids(alt) == all_ids(tmp_settings.output_db)
+
+    few = tmp_path / "few" / "places.db"
+    assert main(["run", "--out", str(few)], settings=tmp_settings, transport=transport_returning_few) == 1
+    assert not few.exists()
+    failed = sorted(tmp_settings.work_dir.glob("*/report.md"), key=lambda p: p.stat().st_mtime)[-1]
+    assert "80% of previous" in failed.read_text(encoding="utf-8")
+
+
+def test_cli_invalid_settings_exit_2(monkeypatch, capsys):
+    import jinju_pipeline.__main__ as cli
+    from jinju_pipeline.settings import Settings
+
+    monkeypatch.setattr(cli, "get_settings", lambda: Settings(_env_file=None, daily_quota="many"))
+    assert main(["report", "--run-id", "x"]) == 2
+    assert "설정 오류" in capsys.readouterr().err
