@@ -1,12 +1,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useCollectionStore } from '../../stores/collection'
+import { useLanternsStore } from '../../stores/lanterns'
 import { useRoute, useRouter } from 'vue-router'
 import WeatherWidget from '../WeatherWidget.vue'
 import { useBreakpoint } from '../../composables/useBreakpoint'
 import { DEFAULT_STATE, parseQuery, searchState, toQuery } from '../../composables/useExploreQuery'
 
 const collection = useCollectionStore()
+// The 32px demo banner is sticky at top-0; stack the header below it.
+const demoOn = computed(() => useLanternsStore().demo.enabled)
 const progress = computed(() => collection.progress)
 const total = computed(() => collection.collectionIds.length || 30)
 
@@ -41,8 +44,8 @@ function submit() {
 
 <template>
   <header
-    class="sticky top-0 z-[60] bg-night-900 flex items-center gap-4 px-4 md:px-8"
-    :class="isMobile ? 'h-14 justify-between' : 'h-[72px]'"
+    class="sticky z-[60] bg-night-900 flex items-center gap-4 px-4 md:px-8"
+    :class="[isMobile ? 'h-14 justify-between' : 'h-[72px]', demoOn ? 'top-8' : 'top-0']"
   >
     <router-link
       to="/"
