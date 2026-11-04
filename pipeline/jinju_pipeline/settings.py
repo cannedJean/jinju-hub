@@ -1,0 +1,40 @@
+"""Pipeline settings (env vars and pipeline/.env)."""
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PIPELINE_ROOT = REPO_ROOT / "pipeline"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=PIPELINE_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    data_go_kr_key: SecretStr | None = None
+    repo_root: Path = REPO_ROOT
+    region_path: Path = REPO_ROOT / "config" / "region.yaml"
+    raw_dir: Path = PIPELINE_ROOT / "data" / "raw"
+    work_dir: Path = PIPELINE_ROOT / "data" / "work"
+    state_dir: Path = PIPELINE_ROOT / "data" / "state"
+    curation_dir: Path = PIPELINE_ROOT / "curation"
+    output_db: Path = REPO_ROOT / "backend" / "app" / "data" / "places.db"
+    output_report: Path = REPO_ROOT / "backend" / "app" / "data" / "report.json"
+    daily_quota: int = 900
+    run_quota: int | None = None
+    city_concurrency: int = 4
+    city_min_interval: float = 0.25
+    tour_concurrency: int = 5
+    gate_min_first_run: int = 300
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
