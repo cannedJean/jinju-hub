@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { postChat } from '../api/chat'
 import { getApiDetail } from '../api/client'
 
-const STORAGE_KEY = 'localhub_chat'
+const STORAGE_KEY = 'jinjuhub.chat.v1'
 
 // Guard against malformed sessionStorage so a bad value can never crash the app.
 function loadHistory() {

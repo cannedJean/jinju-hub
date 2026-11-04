@@ -69,7 +69,7 @@ onMounted(loadWeather)
       class="flex items-center gap-2 bg-primary-tint rounded-[24px] px-3 md:px-4 py-1.5 border border-selected-border opacity-60"
     >
       <span class="text-[14px] text-primary-strong md:hidden">날씨…</span>
-      <span class="hidden md:inline text-[14px] text-primary-strong">대전 날씨 확인 중…</span>
+      <span class="hidden md:inline text-[14px] text-primary-strong">진주 날씨 확인 중…</span>
     </div>
 
     <div
@@ -97,8 +97,8 @@ onMounted(loadWeather)
       :title="`${weather.condition || ''} · ${weather.source || ''}`"
     >
       <span aria-hidden="true">{{ weatherIcon }}</span>
-      <span class="md:hidden">{{ temperature || '대전' }}</span>
-      <span class="hidden md:inline">대전 {{ temperature }}</span>
+      <span class="md:hidden">{{ temperature || '진주' }}</span>
+      <span class="hidden md:inline">진주 {{ temperature }}</span>
       <span v-if="recommendationLabel" class="hidden md:inline">· {{ recommendationLabel }}</span>
     </div>
   </div>

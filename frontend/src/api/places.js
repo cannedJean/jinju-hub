@@ -12,6 +12,7 @@ export function fetchMeta() {
 }
 
 // query: { q, category[], tags[], bbox, near, radius, sort, page, size }
+// bbox must be a comma-joined string "minLng,minLat,maxLng,maxLat"; near is "lat,lng".
 export function fetchPlaces(query = {}) {
   return get('/places', query)
 }

@@ -115,7 +115,7 @@ function goSource(source) {
         >
           <span class="text-5xl mb-4" aria-hidden="true">💬</span>
           <p class="text-[15px]">
-            안녕하세요! 대전·충청 지역 정보를 도와드려요.<br />궁금한 장소나 축제에 대해 물어보세요.
+            안녕하세요! 진주 여행 정보를 도와드려요.<br />궁금한 장소나 축제에 대해 물어보세요.
           </p>
         </div>
 
