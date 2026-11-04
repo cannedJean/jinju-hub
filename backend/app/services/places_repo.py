@@ -60,6 +60,7 @@ class PlacesRepo:
         self.report_path = report_path
         row = self._con.execute("SELECT value FROM meta WHERE key='fts'").fetchone()
         self.fts_mode = row[0] if row else "none"
+        self.last_search_mode: str | None = None
 
     def close(self) -> None:
         self._con.close()
@@ -93,6 +94,7 @@ class PlacesRepo:
         params: list = []
         order_params: list = []
         use_fts = bool(tokens) and self.fts_mode == "trigram" and all(len(t) >= 3 for t in tokens)
+        self.last_search_mode = "fts" if use_fts else "like"  # introspection for tests
         if use_fts:
             frm = "places_fts JOIN places p ON p.rowid = places_fts.rowid"
             where.append("places_fts MATCH ?")

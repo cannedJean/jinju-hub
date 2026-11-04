@@ -164,14 +164,25 @@ def test_fixture_uses_trigram_fts(repo):
     assert repo.fts_mode == "trigram"
 
 
-@pytest.mark.parametrize("q", ['진주성(촉석루) "AND" OR NOT', '"""', "촉석루 OR NOT 진주성", "촉석루* 진주성)"])
+@pytest.mark.parametrize("q", ['진주성(촉석루) "AND" NOT', '"""', "촉석루* 진주성)", "촉석루 AND 진주성", "촉석루 NOT 진주성"])
 def test_fts_path_operators_are_literals(repo, q):
     repo.search(PlaceQuery(q=q))  # all tokens >= 3 chars -> quoted MATCH path; must not raise
+    assert repo.last_search_mode == "fts"
 
 
 def test_fts_operator_words_are_and_of_literals(repo):
-    assert repo.search(PlaceQuery(q="촉석루 OR 존재안함")).total == 0
+    for q in ("촉석루 AND 존재안함", "촉석루 NOT 존재안함"):
+        assert repo.search(PlaceQuery(q=q)).total == 0  # operator semantics would return >= 1 for NOT
+        assert repo.last_search_mode == "fts"
     assert repo.search(PlaceQuery(q="촉석루 촉석루")).total >= 1
+    assert repo.last_search_mode == "fts"
+
+
+@pytest.mark.parametrize("q", ['진주성(촉석루) "AND" OR NOT', "촉석루 OR NOT 진주성", "촉석루 OR 존재안함", "진주성(촉석루) \"AND\" -*"])
+def test_like_path_with_short_tokens(repo, q):
+    repo.search(PlaceQuery(q=q))
+    assert repo.last_search_mode == "like"
+    assert repo.search(PlaceQuery(q="촉석루 OR 존재안함")).total == 0
 
 
 def test_query_input_caps():
