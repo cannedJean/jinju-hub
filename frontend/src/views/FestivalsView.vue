@@ -18,7 +18,7 @@ const list = computed(() => festivals[tab.value])
 const today = computed(() => festivals.today || lanterns.effectiveToday)
 
 onMounted(festivals.load)
-watch(() => [lanterns.demo.enabled, lanterns.demo.today], festivals.load)
+watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festivals.load())
 </script>
 
 <template>

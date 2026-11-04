@@ -78,7 +78,7 @@ function submit() {
     </nav>
 
     <div class="flex items-center gap-3" :class="{ 'ml-auto': isMobile }">
-      <WeatherWidget />
+      <WeatherWidget compact />
       <slot name="lantern-progress">
         <router-link
           to="/lanterns"

@@ -3,7 +3,7 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StateView from '../components/StateView.vue'
 import { fetchPost, deletePost } from '../api/posts'
-import { getApiDetail, getApiStatus } from '../api/client'
+import { RATE_LIMIT_MESSAGE, getApiDetail, getApiStatus } from '../api/client'
 import { usePostAuthStore } from '../stores/postAuth'
 import { getCategoryColor, getCategoryLabel, formatDate } from '../utils/constants'
 
@@ -39,7 +39,8 @@ async function loadData() {
       notFound.value = true
     } else {
       error.value = true
-      errorMessage.value = getApiDetail(e, '게시글을 불러올 수 없습니다.')
+      errorMessage.value =
+        getApiStatus(e) === 429 ? RATE_LIMIT_MESSAGE : getApiDetail(e, '게시글을 불러올 수 없습니다.')
     }
   } finally {
     loading.value = false
@@ -117,6 +118,8 @@ async function confirmAction() {
     const status = getApiStatus(e)
     if (status === 403) {
       pwdError.value = '비밀번호가 일치하지 않습니다.'
+    } else if (status === 429) {
+      pwdError.value = RATE_LIMIT_MESSAGE
     } else if (status === 404) {
       pwdError.value = '이미 삭제되었거나 존재하지 않는 게시글입니다.'
     } else {

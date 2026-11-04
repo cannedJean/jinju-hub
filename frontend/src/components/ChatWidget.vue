@@ -1,11 +1,12 @@
 <script setup>
 import { nextTick, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '../stores/chat'
-import { getChatSourceRoute } from '../utils/chatSources'
+import { useLanternsStore } from '../stores/lanterns'
+import { fetchPlace } from '../api/places'
+import { toSourceLinks } from '../utils/chatSources'
+import { CHAT_SUGGESTIONS as suggestions } from '../data/chatSuggestions'
 
-const router = useRouter()
 const chat = useChatStore()
 const { history, loading, error, errorMessage } = storeToRefs(chat)
 
@@ -14,13 +15,6 @@ const input = ref('')
 const chatBody = ref(null)
 const inputElement = ref(null)
 const openButton = ref(null)
-// Temporary inline suggestions; replaced in C8.
-const suggestions = [
-  '진주 명소를 추천해줘',
-  '이번 주말 축제를 알려줘',
-  '야경 보기 좋은 곳은 어디야?',
-  '비 오는 날 갈 만한 실내 장소는?',
-]
 
 function scrollToBottom() {
   nextTick(() => {
@@ -57,11 +51,24 @@ async function submit(text) {
   await chat.send(message)
 }
 
-function goSource(source) {
-  const route = getChatSourceRoute(source)
-  if (route) {
-    isOpen.value = false
-    router.push(route)
+// Saves a place source to the lantern list; the summary comes from the place API.
+const lanterns = useLanternsStore()
+const savingIds = ref(new Set())
+const saveFailed = ref(false)
+
+async function saveSource(link) {
+  if (savingIds.value.has(link.placeId)) return
+  savingIds.value = new Set(savingIds.value).add(link.placeId)
+  saveFailed.value = false
+  try {
+    const place = await fetchPlace(link.placeId)
+    lanterns.save({ ...place, id: place.id ?? link.placeId, title: place.title ?? link.label })
+  } catch {
+    saveFailed.value = true
+  } finally {
+    const next = new Set(savingIds.value)
+    next.delete(link.placeId)
+    savingIds.value = next
   }
 }
 </script>
@@ -95,7 +102,7 @@ function goSource(source) {
           <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-xl">
             🤖
           </div>
-          <span id="chat-title" class="font-extrabold text-[16px]">로컬허브 지역 비서</span>
+          <span id="chat-title" class="font-extrabold text-[16px]">진주허브 지역 비서</span>
         </div>
         <button
           type="button"
@@ -142,17 +149,40 @@ function goSource(source) {
           >
             <div class="text-primary font-bold mb-2">📍 관련 정보 · 추천 게시글</div>
             <div class="flex flex-col gap-1.5">
-              <button
-                v-for="(src, sIdx) in msg.sources"
-                :key="`${src.type}-${src.id}-${sIdx}`"
-                type="button"
-                class="bg-link-chip-bg text-primary px-3 py-2 rounded-[8px] hover:bg-primary-tint text-left transition-colors font-semibold truncate w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                @click="goSource(src)"
+              <div
+                v-for="(link, sIdx) in toSourceLinks(msg.sources)"
+                :key="`${link.kind}-${link.to.params.id}-${sIdx}`"
+                class="flex items-center gap-1.5"
               >
-                {{ src.type === 'post' ? '💬' : '🗺' }} {{ src.label }} ↗
-              </button>
-            </div>
+                <router-link
+                  :to="link.to"
+                  class="flex-1 min-w-0 bg-link-chip-bg text-primary px-3 py-2 rounded-[8px] hover:bg-primary-tint text-left transition-colors font-semibold truncate focus:outline-none focus:ring-1 focus:ring-primary"
+                  @click="isOpen = false"
+                >
+                  {{ link.kind === 'post' ? '💬' : '🗺' }} {{ link.label }} ↗
+                </router-link>
+                <button
+                  v-if="link.kind === 'place'"
+                  type="button"
+                  data-test="source-save"
+                  class="shrink-0 border border-primary text-primary px-2 py-1.5 rounded-[8px] text-[12px] font-bold hover:bg-primary-tint disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  :disabled="lanterns.isSaved(link.placeId) || savingIds.has(link.placeId)"
+                  :aria-label="`${link.label} 담기`"
+                  @click="saveSource(link)"
+                >
+                  {{ lanterns.isSaved(link.placeId) ? '담김' : '◇ 담기' }}
+                </button>
+              </div>
+              </div>
           </div>
+        </div>
+
+        <div
+          v-if="saveFailed"
+          class="self-start text-danger text-[13px]"
+          role="alert"
+        >
+          장소 정보를 불러오지 못해 담지 못했어요.
         </div>
 
         <div

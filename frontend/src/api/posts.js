@@ -4,8 +4,10 @@ export function fetchPosts(params = {}) {
   return apiClient.get('/posts', { params }).then((res) => res.data)
 }
 
-export function fetchPost(id) {
-  return apiClient.get(`/posts/${id}`).then((res) => res.data)
+// countView=false skips the view counter (e.g. when opening the edit form).
+export function fetchPost(id, { countView = true } = {}) {
+  const config = countView ? undefined : { params: { count_view: false } }
+  return apiClient.get(`/posts/${id}`, config).then((res) => res.data)
 }
 
 export function createPost(payload) {

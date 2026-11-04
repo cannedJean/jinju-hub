@@ -16,9 +16,11 @@ const progress = computed(() => collection.progress)
 
 const banner = computed(() => {
   const f = festivals.ongoing[0]
-  if (f) return `지금 진행 중: ${f.title} (${formatDateRange(f.start_date, f.end_date)})`
+  const range = (x) => formatDateRange(x.start_date, x.end_date)
+  const paren = (x) => (range(x) ? ` (${range(x)})` : '')
+  if (f) return `지금 진행 중: ${f.title}${paren(f)}`
   const u = festivals.upcoming[0]
-  if (u) return `다음 축제: ${u.title} (${formatDateRange(u.start_date, u.end_date)}) · ${u.status_label}`
+  if (u) return `다음 축제: ${u.title}${paren(u)} · ${u.status_label}`
   const label = festivals.items[0]?.status_label
   return `유등축제는 매년 10월${label ? ` · ${label}` : ''}`
 })
@@ -27,7 +29,7 @@ onMounted(() => {
   festivals.load()
   collection.load().catch(() => {})
 })
-watch(() => [lanterns.demo.enabled, lanterns.demo.today], festivals.load)
+watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festivals.load())
 </script>
 
 <template>

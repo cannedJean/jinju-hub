@@ -2,6 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { fetchWeather } from '../api/weather'
 
+// compact: header chip (temperature + icon only on small screens, no recommendation text).
+const props = defineProps({ compact: { type: Boolean, default: false } })
+
 const weather = ref(null)
 const loading = ref(true)
 const failed = ref(false)
@@ -99,7 +102,18 @@ onMounted(loadWeather)
       <span aria-hidden="true">{{ weatherIcon }}</span>
       <span class="md:hidden">{{ temperature || '진주' }}</span>
       <span class="hidden md:inline">진주 {{ temperature }}</span>
-      <span v-if="recommendationLabel" class="hidden md:inline">· {{ recommendationLabel }}</span>
+      <span v-if="recommendationLabel" :class="props.compact ? 'hidden lg:inline' : 'hidden md:inline'">
+        · {{ recommendationLabel }}
+      </span>
     </div>
+    <router-link
+      v-if="weather?.recommendation === 'indoor'"
+      :to="{ name: 'explore', query: { tags: 'indoor' } }"
+      data-test="indoor-link"
+      class="ml-2 text-[13px] font-bold text-primary underline underline-offset-2 whitespace-nowrap"
+      :class="props.compact ? 'hidden lg:inline' : ''"
+    >
+      실내 명소 보기
+    </router-link>
   </div>
 </template>

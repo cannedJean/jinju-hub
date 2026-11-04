@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import StateView from '../components/StateView.vue'
 import Pagination from '../components/Pagination.vue'
 import { fetchPosts } from '../api/posts'
+import { RATE_LIMIT_MESSAGE, getApiStatus } from '../api/client'
 import { normalizePage } from '../utils/normalizers'
 import { POST_CATEGORIES, getCategoryColor, getCategoryLabel, formatDateShort } from '../utils/constants'
 
@@ -21,10 +22,12 @@ const posts = ref([])
 const totalPages = ref(1)
 const loading = ref(true)
 const error = ref(false)
+const errorMessage = ref('')
 
 async function loadData() {
   loading.value = true
   error.value = false
+  errorMessage.value = ''
   try {
     const params = { page: page.value, size: 10 }
     if (filterCat.value) params.category = filterCat.value
@@ -34,8 +37,9 @@ async function loadData() {
     const normalized = normalizePage(data)
     posts.value = normalized.items
     totalPages.value = normalized.totalPages
-  } catch {
+  } catch (e) {
     error.value = true
+    errorMessage.value = getApiStatus(e) === 429 ? RATE_LIMIT_MESSAGE : ''
     posts.value = []
   } finally {
     loading.value = false
@@ -139,6 +143,7 @@ onMounted(loadData)
       <StateView
         :loading="loading"
         :error="error"
+        :error-message="errorMessage || undefined"
         :empty="posts.length === 0"
         empty-message="검색 결과가 없습니다."
         @retry="loadData"
@@ -161,6 +166,7 @@ onMounted(loadData)
               <div class="text-[15px] font-medium text-strong truncate md:px-4">{{ p.title }}</div>
               <div class="text-left md:text-center text-[13px] text-faint font-medium shrink-0">
                 {{ formatDateShort(p.created_at) }}
+                <span class="md:hidden" v-if="p.views !== undefined && p.views !== null"> · 조회 {{ p.views }}</span>
               </div>
               <div class="hidden md:block text-center text-[13px] text-muted font-medium">
                 {{ p.views !== undefined && p.views !== null ? p.views : '-' }}

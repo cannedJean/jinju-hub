@@ -10,6 +10,8 @@ const apiClient = axios.create({
   timeout: 12_000,
 })
 
+export const RATE_LIMIT_MESSAGE = '잠시 후 다시 시도해 주세요.'
+
 export function getApiStatus(error) {
   return error?.response?.status ?? 0
 }

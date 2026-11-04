@@ -23,6 +23,7 @@ const CHIP = {
       />
       <ImagePlaceholder v-else emoji="🎆" />
     </div>
+    <p v-if="festival.hero_image" class="px-4 pt-1 text-[11px] text-muted">사진: 한국관광공사·진주시 제공</p>
     <div class="p-4 flex-1 flex flex-col gap-2">
       <div class="flex items-center gap-2 flex-wrap">
         <span

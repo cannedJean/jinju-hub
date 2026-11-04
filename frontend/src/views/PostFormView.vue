@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StateView from '../components/StateView.vue'
 import { fetchPost, createPost, updatePost } from '../api/posts'
-import { getApiDetail, getApiStatus, getValidationErrors } from '../api/client'
+import { RATE_LIMIT_MESSAGE, getApiDetail, getApiStatus, getValidationErrors } from '../api/client'
 import { usePostAuthStore } from '../stores/postAuth'
 import { POST_CATEGORIES } from '../utils/constants'
 
@@ -28,7 +28,7 @@ async function loadData() {
   loading.value = true
   error.value = false
   try {
-    const data = await fetchPost(route.params.id)
+    const data = await fetchPost(route.params.id, { countView: false })
     form.category = data.category
     form.title = data.title
     form.content = data.content
@@ -37,7 +37,11 @@ async function loadData() {
   } catch (e) {
     error.value = true
     errorMessage.value =
-      getApiStatus(e) === 404 ? '존재하지 않는 게시글입니다.' : '게시글을 불러올 수 없습니다.'
+      getApiStatus(e) === 404
+        ? '존재하지 않는 게시글입니다.'
+        : getApiStatus(e) === 429
+          ? RATE_LIMIT_MESSAGE
+          : '게시글을 불러올 수 없습니다.'
   } finally {
     loading.value = false
   }
@@ -99,6 +103,8 @@ async function submit() {
       if (!Object.values(fieldErrors).some(Boolean)) {
         generalError.value = '입력값을 다시 확인해 주세요.'
       }
+    } else if (status === 429) {
+      generalError.value = RATE_LIMIT_MESSAGE
     } else if (status === 403 && isEdit.value) {
       fieldErrors.password = '비밀번호가 일치하지 않습니다.'
     } else {
