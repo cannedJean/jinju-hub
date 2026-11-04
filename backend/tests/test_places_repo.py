@@ -158,3 +158,25 @@ def test_report(fixture_db_path, tmp_path):
     r2 = PlacesRepo(fixture_db_path, tmp_path / "missing.json")
     assert r2.report() is None
     r2.close()
+
+
+def test_fixture_uses_trigram_fts(repo):
+    assert repo.fts_mode == "trigram"
+
+
+@pytest.mark.parametrize("q", ['진주성(촉석루) "AND" OR NOT', '"""', "촉석루 OR NOT 진주성", "촉석루* 진주성)"])
+def test_fts_path_operators_are_literals(repo, q):
+    repo.search(PlaceQuery(q=q))  # all tokens >= 3 chars -> quoted MATCH path; must not raise
+
+
+def test_fts_operator_words_are_and_of_literals(repo):
+    assert repo.search(PlaceQuery(q="촉석루 OR 존재안함")).total == 0
+    assert repo.search(PlaceQuery(q="촉석루 촉석루")).total >= 1
+
+
+def test_query_input_caps():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        PlaceQuery(q="가" * 201)
+    with pytest.raises(ValidationError):
+        PlaceQuery(near=(35.1, 128.1), radius=0)

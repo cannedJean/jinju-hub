@@ -4,12 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class PlaceQuery(BaseModel):
-    q: str | None = None
+    q: str | None = Field(default=None, max_length=200)
     category: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     bbox: tuple[float, float, float, float] | None = None  # (min_lng, min_lat, max_lng, max_lat)
     near: tuple[float, float] | None = None  # (lat, lng)
-    radius: int | None = Field(default=None, le=20000)
+    radius: int | None = Field(default=None, ge=1, le=20000)
     sort: Literal["relevance", "distance", "name", "collection"] = "relevance"
     page: int = Field(default=1, ge=1)
     size: int = Field(default=20, ge=1, le=50)
