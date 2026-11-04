@@ -1,0 +1,46 @@
+{
+  "_handmade": true,
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "rnum": "1",
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "110",
+            "lDongSignguNm": "창원시"
+          },
+          {
+            "rnum": "1",
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "150",
+            "lDongSignguNm": "통영시"
+          },
+          {
+            "rnum": "1",
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "170",
+            "lDongSignguNm": "진주시"
+          },
+          {
+            "rnum": "1",
+            "lDongRegnCd": "48",
+            "lDongRegnNm": "경상남도",
+            "lDongSignguCd": "190",
+            "lDongSignguNm": "사천시"
+          }
+        ]
+      },
+      "numOfRows": 100,
+      "pageNo": 1,
+      "totalCount": 4
+    }
+  }
+}

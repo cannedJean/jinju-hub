@@ -1,0 +1,41 @@
+{
+  "_handmade": true,
+  "response": {
+    "header": {
+      "resultCode": "0000",
+      "resultMsg": "OK"
+    },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "contentid": "126508",
+            "contenttypeid": "12",
+            "createdtime": "20031205090000",
+            "modifiedtime": "20260901120000",
+            "tel": "055-749-5171",
+            "telname": "",
+            "homepage": "<a href=\"https://www.jinju.go.kr/tour\" target=\"_blank\">https://www.jinju.go.kr/tour</a>",
+            "firstimage": "https://tong.visitkorea.or.kr/cms/resource/126508.jpg",
+            "firstimage2": "https://tong.visitkorea.or.kr/cms/resource/126508.jpg",
+            "cpyrhtDivCd": "Type3",
+            "areacode": "",
+            "title": "진주성",
+            "zipcode": "52763",
+            "addr1": "경상남도 진주시 남강로 626",
+            "addr2": "",
+            "mapx": "128.0845",
+            "mapy": "35.1925",
+            "mlevel": "6",
+            "overview": "임진왜란 3대 대첩 중 하나인 진주대첩의 격전지로, 촉석루와 국립진주박물관이 자리한 사적이다.",
+            "lDongRegnCd": "48",
+            "lDongSignguCd": "170"
+          }
+        ]
+      },
+      "numOfRows": 1,
+      "pageNo": 1,
+      "totalCount": 1
+    }
+  }
+}

@@ -58,3 +58,30 @@ def ctx_factory(tmp_path):
         )
 
     return _make
+
+
+@pytest.fixture
+def previous_snapshot():
+    """Factory: previous_snapshot(raw_by_source=..., pending=..., generated_at=...)."""
+    from datetime import datetime
+
+    from jinju_pipeline.models import PreviousSnapshot
+    from jinju_pipeline.raw_store import KST
+
+    def _make(raw_by_source=None, pending=(), generated_at=None):
+        raw = raw_by_source or {}
+        return PreviousSnapshot(
+            generated_at=generated_at or datetime(2026, 11, 1, 3, 0, tzinfo=KST),
+            place_count=sum(len(v) for v in raw.values()),
+            source_index={},
+            id_order={},
+            aliases={},
+            raw_by_source=raw,
+            modified_by_key={
+                r.key: r.payload["list"]["modifiedtime"]
+                for v in raw.values() for r in v if "list" in r.payload
+            },
+            detail_pending_keys=set(pending),
+        )
+
+    return _make
