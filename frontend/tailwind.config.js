@@ -1,0 +1,50 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{vue,js}'],
+  theme: {
+    extend: {
+      colors: {
+        'night-900': 'var(--color-night-900)',
+        'night-700': 'var(--color-night-700)',
+        'lantern-500': 'var(--color-lantern-500)',
+        'lantern-400': 'var(--color-lantern-400)',
+        'lantern-glow': 'var(--color-lantern-glow)',
+        surface: 'var(--color-surface)',
+        'cat-sight': 'var(--cat-sight)',
+        'cat-culture': 'var(--cat-culture)',
+        'cat-food': 'var(--cat-food)',
+        'cat-stay': 'var(--cat-stay)',
+        'cat-festival': 'var(--cat-festival)',
+        'cat-shopping': 'var(--cat-shopping)',
+        'cat-leisure': 'var(--cat-leisure)',
+        'cat-course': 'var(--cat-course)',
+
+        // Legacy names used by ported board/chat/weather components.
+        primary: 'var(--primary)',
+        'primary-strong': 'var(--primary-strong)',
+        'primary-tint': 'var(--primary-tint)',
+        'selected-border': 'var(--selected-border)',
+        heading: 'var(--text-heading)',
+        body: 'var(--text-body)',
+        strong: 'var(--text-strong)',
+        muted: 'var(--text-muted)',
+        faint: 'var(--text-faint)',
+        nav: 'var(--text-nav)',
+        page: 'var(--bg-page)',
+        card: 'var(--bg-card)',
+        subtle: 'var(--bg-subtle)',
+        chat: 'var(--bg-chat)',
+        border: 'var(--border)',
+        'border-input': 'var(--border-input)',
+        'border-list': 'var(--border-list)',
+        danger: 'var(--danger)',
+        'danger-bg': 'var(--danger-bg)',
+        'danger-border': 'var(--danger-border)',
+      },
+      fontFamily: {
+        sans: ['Pretendard', 'Inter', 'Apple SD Gothic Neo', 'Noto Sans KR', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
