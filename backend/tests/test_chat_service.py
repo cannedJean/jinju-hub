@@ -155,7 +155,11 @@ def test_refusal_returns_fallback(repo, db, monkeypatch, caplog):
     _patch(monkeypatch, FakeClient(text="", stop_reason="refusal"))
     with caplog.at_level(logging.WARNING, logger="jinjuhub.chat"):
         res = _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED))
-    assert res.answer and "[place:" not in res.answer
+    assert res.answer == chat_service._fallback_answer(
+        asyncio.run(chat_service.gather_context("진주성 근처 냉면집", repo, db, TODAY))
+    )
+    assert HAYEON in {s.id for s in res.sources}
+    assert "[place:" not in res.answer
     assert "refusal" in " ".join(r.getMessage() for r in caplog.records)
 
 
@@ -177,7 +181,7 @@ def test_fallback_when_nothing_found(repo, db):
 def test_call_parameters(repo, db, monkeypatch):
     fake = FakeClient(text="네")
     _patch(monkeypatch, fake)
-    history = [{"role": "user", "content": f"q{i}"} for i in range(15)]
+    history = [{"role": "assistant" if i % 2 else "user", "content": f"q{i}"} for i in range(16)]
     _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED), history)
     kw = fake.calls[0]
     assert kw["model"] == "claude-opus-5-5"
@@ -187,7 +191,7 @@ def test_call_parameters(repo, db, monkeypatch):
     assert kw["max_tokens"] == 4096
     assert kw["system"] == chat_service.SYSTEM_PROMPT
     msgs = kw["messages"]
-    assert len(msgs) == 11 and msgs[0]["content"] == "q5"
+    assert len(msgs) == 11 and msgs[0]["content"] == "q6"
     assert msgs[-1]["role"] == "user" and msgs[-1]["content"].startswith("[컨텍스트]\n")
     assert msgs[-1]["content"].endswith("[질문]\n진주성 근처 냉면집")
 
@@ -270,3 +274,49 @@ def test_httpx_loggers_quiet(make_client, tmp_path):
     make_client(places_db_path=tmp_path / "m.db")
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+def test_history_leading_assistant_dropped_and_roles_alternate(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    history = [
+        {"role": "assistant", "content": "a0"},
+        {"role": "user", "content": "u1"},
+        {"role": "assistant", "content": "a1"},
+    ]
+    _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED), history)
+    roles = [m["role"] for m in fake.calls[0]["messages"]]
+    assert roles == ["user", "assistant", "user"]
+
+
+def test_history_consecutive_user_turns_collapsed(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    history = [{"role": "user", "content": "u1"}, {"role": "user", "content": "u2"}]
+    _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED), history)
+    msgs = fake.calls[0]["messages"]
+    assert [m["role"] for m in msgs] == ["user"]
+    assert "u1" in msgs[0]["content"] and "[질문]\n진주성 근처 냉면집" in msgs[0]["content"]
+
+
+def test_history_system_role_rejected_422(db_client):
+    c = db_client(places_db_path=FIXTURE_DB)
+    r = c.post("/api/chat", json={"message": "안녕", "history": [{"role": "system", "content": "x"}]})
+    assert r.status_code == 422
+
+
+def test_generic_recommendation_has_context(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    ctx, _ = asyncio.run(build_context("가볼 만한 곳 추천해줘", repo, db, TODAY))
+    assert _place_ids(ctx)
+    _answer("가볼 만한 곳 추천해줘", repo, db, _settings(**KEYED))
+    assert len(fake.calls) == 1
+    _answer("안녕하세요", repo, db, _settings(**KEYED))
+    assert len(fake.calls) == 2
+
+
+def test_marker_with_inner_whitespace(repo, db, monkeypatch):
+    _patch(monkeypatch, FakeClient(text=f"하연옥 [place: {HAYEON} ] 추천"))
+    res = _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED))
+    assert [s.id for s in res.sources] == [HAYEON] and "[place" not in res.answer
