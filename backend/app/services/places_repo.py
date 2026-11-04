@@ -3,10 +3,10 @@ import json
 import math
 import sqlite3
 from datetime import date
-from functools import lru_cache
 from pathlib import Path
 
-from app.core.config import get_settings
+from fastapi import Request
+
 from app.schemas.places import (
     BadgeOut, CategoryCount, CollectionOut, CollectionPlace, ImageOut, Jinju8Item, Marker, MetaOut,
     PlaceDetail, PlacePage, PlaceQuery, PlaceSummary, SourceOut,
@@ -257,7 +257,10 @@ class PlacesRepo:
             return None
 
 
-@lru_cache()
-def get_places_repo() -> PlacesRepo:
-    s = get_settings()
-    return PlacesRepo(s.places_db_path, s.report_path)
+def get_places_repo(request: Request) -> PlacesRepo:
+    """FastAPI dependency: one read-only repo per app, built lazily from app.state.settings."""
+    repo = getattr(request.app.state, "places_repo", None)
+    if repo is None:
+        s = request.app.state.settings
+        repo = request.app.state.places_repo = PlacesRepo(s.places_db_path, s.report_path)
+    return repo
