@@ -50,3 +50,28 @@ def make_client():
     yield _make
     for c in clients:
         c.__exit__(None, None, None)
+
+
+@pytest.fixture(autouse=True)
+def _limiter_off():
+    from app.core.ratelimit import limiter
+
+    limiter.reset()
+    limiter.enabled = False
+    yield
+    limiter.reset()
+    limiter.enabled = False
+
+
+@pytest.fixture
+def db_client(make_client, tmp_path):
+    """Client on a tmp sqlite DB with the schema created directly (migrations are tested separately)."""
+    from app.models.base import Base
+    from app.models import board  # noqa: F401
+
+    def _make(**overrides):
+        c = make_client(database_url=f"sqlite:///{(tmp_path / 'board.db').as_posix()}", **overrides)
+        Base.metadata.create_all(c.app.state.db_engine)
+        return c
+
+    return _make
