@@ -50,6 +50,13 @@ def _parser() -> argparse.ArgumentParser:
     return ap
 
 
+def configure_logging() -> None:
+    """INFO logging for the CLI. httpx/httpcore log full request URLs (TourAPI's carry serviceKey) at INFO."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
@@ -133,5 +140,5 @@ def main(argv: list[str] | None = None, *, settings: Settings | None = None,
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):  # Windows consoles (cp949) cannot encode every character
         stream.reconfigure(errors="replace")
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
     sys.exit(main())

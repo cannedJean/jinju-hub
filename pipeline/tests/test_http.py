@@ -202,3 +202,17 @@ async def test_non_dict_json_is_upstream_error():
         with pytest.raises(UpstreamError) as ei:
             await fetch_json(c, "https://x", {}, limiter=RateLimiter(2, 0), wait=tenacity.wait_none())
     assert ei.value.retryable is False
+
+
+async def test_cli_logging_never_prints_request_urls(caplog):
+    """httpx logs every request URL at INFO; TourAPI URLs carry serviceKey, so the CLI must silence it."""
+    import logging
+
+    from jinju_pipeline.__main__ import configure_logging
+
+    configure_logging()
+    with caplog.at_level(logging.DEBUG):
+        async with make_client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={}))) as c:
+            await fetch_json(c, "https://apis.data.go.kr/x", {"serviceKey": "secret-test-key"},
+                             limiter=RateLimiter(1, 0.0))
+    assert "secret-test-key" not in caplog.text
