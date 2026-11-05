@@ -60,5 +60,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/app/data/places.db backend/app/data/report.json
           git commit -m "data: weekly refresh ${{ github.run_id }}"
+          # If places.db (binary) also changed upstream since checkout, this rebase conflicts and the job
+          # fails loudly by design (no auto-merge of a binary DB) - just rerun the workflow on the new HEAD.
           git pull --rebase origin "$REF_NAME"
           git push origin "HEAD:$REF_NAME"

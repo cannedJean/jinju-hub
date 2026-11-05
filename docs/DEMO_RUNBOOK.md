@@ -2,7 +2,7 @@
 
 ## 시연 전 (T-10분)
 1. `https://<render-service>.onrender.com/api/health`를 열어 200이 나올 때까지 기다린다 (무료 플랜 콜드스타트 약 50초).
-2. `https://<site>.netlify.app/?demo=1`을 열어 우측 상단 `시연 모드` 표시를 확인한다.
+2. `https://<site>.netlify.app/?demo=1`을 열어 화면 맨 위 가로 전체 주황 배너 `시연 모드`(기준일을 바꾸면 `· 기준일 YYYY-MM-DD`)를 확인한다.
 3. 브라우저 위치 권한은 "허용", 또는 시연 모드의 도착 시뮬레이션을 쓴다.
 4. 챗봇 한 번 호출해 응답 확인 (`ANTHROPIC_API_KEY` 설정 후).
 
@@ -32,8 +32,15 @@
 ```bash
 # 터미널 1: 백엔드 (SQLite 게시판)
 cd backend && source .venv/Scripts/activate
-DATABASE_URL=sqlite:///./jinjuhub.db uvicorn main:app --port 8000
+# backend/.env의 Neon URL 대신 로컬 SQLite를 쓰도록 먼저 지정한다 (환경변수가 .env보다 우선).
+export DATABASE_URL=sqlite:///./jinjuhub.db
+alembic upgrade head                 # 게시판 테이블 생성 (멱등)
+python -m app.scripts.seed_posts     # 시연용 게시글 (멱등)
+uvicorn main:app --port 8000
 # 터미널 2: 프론트
 cd frontend && VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
 ```
 브라우저에서 `http://127.0.0.1:5173/?demo=1`.
+
+- 장소 데이터: `PLACES_DB_PATH` 기본값은 `backend/app/data/places.db`(저장소에 커밋됨) — 따로 설정할 것 없음.
+- 키 없이 실행하면: 챗봇은 `ANTHROPIC_API_KEY`가 없으면 결정적 폴백 답변(검색 결과 요약)을, 날씨 위젯은 `WEATHER_API_KEY`가 없으면 503 오류 상태를 보인다. 둘 다 본 시연 흐름에는 영향 없음.

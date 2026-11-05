@@ -51,7 +51,7 @@
 | 진주시 OpenAPI | 키 불필요, `pageunit` 최대 10, `xposition`=위도/`yposition`=경도 (뒤바뀜), HTTP |
 | 지오코딩 | Kakao/VWorld는 **결과 DB 저장 금지** → 사용 안 함. 소스 제공 좌표만 사용 |
 | 라이선스 | TourAPI 이용허락 제한 없음, 이미지 공공누리 1·3유형(3유형=변경 금지). 진주시 OpenAPI는 data.go.kr에 "이용허락범위 제한 없음"이나 사이트엔 공공누리 표시 없음 → 확인 필요(§12) |
-| 지도 타일 | OSM 공식 타일 대량 사용 금지 정책 → CARTO 베이스맵 사용(무료, 출처 표기) |
+| 지도 타일 | OSM 표준 타일 사용(출처 "© OpenStreetMap contributors"; 대량 트래픽 금지 정책 → 교육용 시연 규모로 한정, `VITE_TILE_URL`로 교체 가능). (CARTO는 API 키 필요로 OSM으로 변경) |
 
 ## 3. 데이터 소스 결정
 
@@ -325,7 +325,7 @@ meta(key, value)  -- data_version(run_id), generated_at, source_counts, region
 - **이 지역 재검색**: 지도 이동 종료(`moveend`) 시 버튼 노출 → 현재 bbox로 `/api/places` 조회해 목록 갱신.
 - **숙소 기준점**: "내 숙소 설정"(지도 클릭/검색 결과의 숙박 장소 선택/현재 위치) → localStorage 저장, 반경 원(500m/1km/3km/5km) 표시, `sort=distance`, 목록에 거리 표시.
 - **목록↔지도 연동**: 목록 hover 시 마커 하이라이트, 마커 클릭 시 목록 스크롤·미리보기 카드.
-- **타일**: CARTO Voyager(주간)/Dark Matter(유등 테마 다크 토글), 출처 "© OpenStreetMap contributors © CARTO" + "한국관광공사 TourAPI·진주시". 타일 URL은 env로 교체 가능.
+- **타일**: OSM 표준 타일(`https://tile.openstreetmap.org/{z}/{x}/{y}.png`), 유등 테마 다크 토글은 타일 레이어 CSS 필터, 출처 "© OpenStreetMap contributors" + "한국관광공사 TourAPI·진주시". 타일 URL은 env(`VITE_TILE_URL`/`VITE_TILE_URL_DARK`)로 교체 가능. (CARTO는 API 키 필요로 OSM으로 변경)
 - `maxBounds` = 진주 bbox + 여유, 최소 줌 11.
 - 팝업은 `textContent` 기반 DOM 생성 유지(XSS 방지, 대전판 패턴 재사용).
 
@@ -450,7 +450,7 @@ meta(key, value)  -- data_version(run_id), generated_at, source_counts, region
 - 장소 데이터는 빌드 산출 SQLite를 배포물에 포함(런타임 외부 호출 0), 주간 GitHub Actions 갱신
 - 게시판 원격 DB = Neon Postgres 무료
 - 챗봇 모델 `claude-opus-5-5`(effort low, env 변경 가능)
-- 지도 타일 CARTO, 클러스터 markercluster
+- 지도 타일 OSM(CARTO는 API 키 필요로 OSM으로 변경), 클러스터 markercluster
 - 점등 반경 150m(정확도 보정), 컬렉션 "유등 30선", 배지 6종, 시연 모드 표시
 - 디자인 테마 "남강의 밤과 유등"(남색+등불 주황)
 
@@ -463,3 +463,20 @@ meta(key, value)  -- data_version(run_id), generated_at, source_counts, region
 KTO 방문자수 기반 "요즘 뜨는 곳", 무장애·반려동물 동반 필터, 영어 콘텐츠(EngService2), 실용 정보 레이어, 로그인·랭킹, PWA.
 
 ---
+
+## 구현 중 변경 사항 (2026-11-05)
+
+구현·실데이터 실행에서 위 설계와 달라진 점만 적는다. 근거와 수치는 `DATA.md`(§1, §4, §5)에 있다.
+
+- **진주시 OpenAPI (§2, §3.1)**: 기본 URL `https://www.jinju.go.kr/openapi/tour/`(`http://`는 https로 302 리다이렉트 → https 사용, 리다이렉트 추적). 페이지 파라미터 `page`(1부터)·`pageunit`(최대 10), 응답 키 total=`record_count`, items=`results`.
+- **병합 규칙 (§5.5, 구현본)**:
+  - 전화 일치는 **서로 다른 소스 사이에서만**, 그리고 한 소스가 그 번호를 서로 다른 레코드 3건 이상에 적었으면(부서 대표번호) 근거에서 제외. 진주시 API의 부서 번호 때문에 원안대로면 297쌍이 잘못 병합됐다.
+  - **같은 TourAPI 소스 안에서는 이름 유사(fuzzy) 매칭 금지**(쇼핑몰 안 브랜드 매장이 `token_set_ratio` 100으로 묶이던 문제). 같은 이름·전화·주소 규칙과 진주시 소스는 그대로.
+  - 필드 우선순위: 진주시 우선, 진주시 안에서는 **관광지(tourinfo) > 축제 > 음식점 > 숙박 > 문화재**. 이름뿐 아니라 카테고리·좌표·전화·운영시간·요금·주차·휴무·메뉴·주소·홈페이지에 같은 순서 적용(사찰+소장 문화재 → 사찰 값).
+  - 결합 순서는 **증거 강도 순 합집합**: `force_merge` 먼저, 이후 `same_name`/`same_name_addr` → `same_phone` → `fuzzy_name`(같은 순위 안은 키 정렬). 입력·키 순서에 따라 결과가 달라지지 않는다.
+  - **암묵적 contentid 분리**: 한 그룹이 같은 TourAPI 소스의 서로 다른 contentid를 둘 이상 갖게 되는 결합은 거부(그 두 레코드 사이에 같은 이름 근거가 있으면 허용). `force_split`은 어떤 경로의 결합도 거부.
+- **좌표 게이트 (§5.7)**: 보유율 기준 **sight 0.85 / culture 0.55 / stay 0.40**. 첫 실행 실측 sight 0.98·culture 0.65·stay 0.48 — 문화재(좌표 없는 묘·비석)와 숙박(좌표 없는 모텔)은 지오코딩 저장 금지 약관 때문에 채울 수 없어, 실측보다 약 10%p 낮은 회귀 감시선으로 정했다. TourAPI 보강 후(0.97/0.65/0.51)에도 값은 그대로.
+- **증분 갱신 (§5.9)**: `areaBasedSyncList2`의 `modifiedtime`은 "이후"가 아니라 **접두 일치**다. 그래서 직전 실행 월부터 이번 달까지 `YYYYMM`으로 월마다 한 번씩 조회하고, 직전 실행일 이후 수정분만 쓴다.
+- **진주8경 (§5.8)**: 진주시 공식 목록(https://www.jinju.go.kr/02232/02244.web)을 따른다 — 제6경 **비봉산의 봄**, 제7경 **월아산 해돋이**, 제8경 **진양호 노을**(설계 초안의 비봉루·월아산 일출·진양호 일몰 대체).
+- **지도 타일 (§2, §7.4)**: OSM 표준 타일, 출처 "© OpenStreetMap contributors". CARTO 래스터 타일은 API 키를 요구해 제외했다.
+- **Neon (§6.5, §8)**: 테이블은 Render 빌드 명령(`alembic upgrade head && python -m app.scripts.seed_posts`, 둘 다 멱등)이 만든다(개발 PC는 5432 차단, 무료 플랜은 셸 없음). Neon **Data API는 쓰지 않는다** — 앱은 Render에서 SQLAlchemy/psycopg로만 접속한다(Data API는 JWT·RLS가 필요하고 bcrypt·레이트리밋을 우회하게 된다).

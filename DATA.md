@@ -4,7 +4,7 @@ JinjuHub의 장소 데이터는 `pipeline/`이 공공 API에서 모아 정제·�
 `backend/app/data/places.db` 하나로 만든다. 백엔드는 실행 중에 외부 API를 부르지 않고 이 파일만 읽는다.
 품질 리포트는 `backend/app/data/report.json`(백엔드 `/api/data/report`)과 `pipeline/data/work/<run_id>/report.md`에 남는다.
 
-- 출처 문구(화면 표기): **"한국관광공사 TourAPI · 진주시 공공데이터"**, 지도 **"© OpenStreetMap contributors © CARTO"**
+- 출처 문구(화면 표기): **"한국관광공사 TourAPI · 진주시 공공데이터"**, 지도 **"© OpenStreetMap contributors"** (OSM 표준 타일; CARTO는 API 키가 필요해 제외)
 - 설계 근거: `docs/superpowers/specs/2026-11-04-jinjuhub-design.md` §3, §5
 
 ## 1. 데이터 소스
