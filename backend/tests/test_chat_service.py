@@ -110,7 +110,7 @@ def test_context_posts_only_when_mentioned(repo, db):
     from app.services import board_service
 
     board_service.create_post(
-        db, PostCreate(category="food", title="냉면 후기", content="하연옥 냉면 맛있어요", password="1234")
+        db, PostCreate(category="food", title="냉면 후기", content="하연옥 냉면 맛있어요", password="123456")
     )
     ctx, sources = asyncio.run(build_context("냉면 후기 알려줘", repo, db, TODAY))
     assert "[post:1]" in ctx and any(s.type == "post" and s.id == "1" for s in sources)

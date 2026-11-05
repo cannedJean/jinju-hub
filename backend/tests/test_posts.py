@@ -4,7 +4,7 @@ from app.core.ratelimit import limiter
 from app.core.security import hash_password, verify_password
 from app.services.database import normalize_db_url
 
-PAYLOAD = {"category": "tour", "title": "진주성 후기", "content": "좋았어요", "password": "1234"}
+PAYLOAD = {"category": "tour", "title": "진주성 후기", "content": "좋았어요", "password": "123456"}
 
 
 def _create(c, **kw):
@@ -23,7 +23,7 @@ def test_crud_flow(db_client):
     assert r.status_code == 200 and r.json()["title"] == "수정됨" and r.json()["updated_at"]
     listing = c.get("/api/posts", params={"keyword": "수정"}).json()
     assert listing["total"] == 1 and listing["totalPages"] == 1
-    assert c.request("DELETE", f"/api/posts/{pid}", json={"password": "1234"}).status_code == 204
+    assert c.request("DELETE", f"/api/posts/{pid}", json={"password": "123456"}).status_code == 204
     assert c.get(f"/api/posts/{pid}").status_code == 404
 
 
@@ -32,7 +32,7 @@ def test_password_stored_hashed(db_client):
     _create(c)
     with c.app.state.db_engine.connect() as conn:
         stored = conn.execute(text("select password from board_posts")).scalar_one()
-    assert stored != "1234" and stored.startswith("$2b$")
+    assert stored != PAYLOAD["password"] and verify_password(PAYLOAD["password"], stored) and stored.startswith("$2b$")
 
 
 def test_wrong_password_403(db_client):
@@ -123,3 +123,77 @@ def test_list_order_breaks_created_at_ties_by_id_desc(db_client):
         conn.execute(text("update board_posts set created_at = '2026-11-05 10:00:00'"))
     ids = [p["id"] for p in c.get("/api/posts").json()["items"]]
     assert ids == sorted(ids, reverse=True)
+
+
+def test_new_post_password_min_length_6(db_client):
+    c = db_client()
+    assert c.post("/api/posts", json={**PAYLOAD, "password": "12345"}).status_code == 422
+    assert c.post("/api/posts", json={**PAYLOAD, "password": "123456"}).status_code == 201
+
+
+def test_existing_short_password_post_still_editable_and_deletable(db_client):
+    c = db_client()
+    pid = _create(c)["id"]
+    with c.app.state.db_engine.begin() as conn:
+        conn.execute(text("update board_posts set password = :p"), {"p": hash_password("1234")})
+    assert c.put(f"/api/posts/{pid}", json={**PAYLOAD, "password": "1234"}).status_code == 200
+    assert c.request("DELETE", f"/api/posts/{pid}", json={"password": "1234"}).status_code == 204
+
+
+def test_put_and_delete_share_one_bucket_per_ip_and_post(db_client):
+    c = db_client(rate_limit="3/minute")
+    limiter.enabled = True
+    pid = _create(c)["id"]
+    other = _create(c)["id"]
+    limiter.reset()
+    bad = {**PAYLOAD, "password": "wrong-pw"}
+    codes = [
+        c.put(f"/api/posts/{pid}", json=bad).status_code,
+        c.request("DELETE", f"/api/posts/{pid}", json={"password": "wrong-pw"}).status_code,
+        c.put(f"/api/posts/{pid}", json=bad).status_code,
+        c.request("DELETE", f"/api/posts/{pid}", json={"password": "wrong-pw"}).status_code,
+    ]
+    assert codes == [403, 403, 403, 429], codes
+    # A different post has its own bucket.
+    assert c.put(f"/api/posts/{other}", json=bad).status_code == 403
+
+
+def test_keyword_search_escapes_like_wildcards(db_client):
+    c = db_client()
+    _create(c, title="할인 100% 후기", content="a")
+    _create(c, title="plain", content="b")
+    _create(c, title="under_score", content="c")
+    _create(c, title="underXscore", content="d")
+    _create(c, title="back\\slash", content="e")
+    titles = lambda kw: {p["title"] for p in c.get("/api/posts", params={"keyword": kw}).json()["items"]}
+    assert titles("%") == {"할인 100% 후기"}
+    assert titles("_") == {"under_score"}
+    assert titles("\\") == {"back\\slash"}
+    assert titles("under_s") == {"under_score"}
+
+
+def test_board_service_has_no_invalid_escape_sequences():
+    import warnings
+    from pathlib import Path
+
+    from app.services import board_service
+
+    path = Path(board_service.__file__)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+def test_search_posts_escapes_like_wildcards(db_client):
+    from sqlalchemy.orm import Session
+
+    from app.services import board_service
+
+    c = db_client()
+    _create(c, title="할인 100% 후기", content="a")
+    _create(c, title="plain", content="b")
+    _create(c, title="under_score", content="c")
+    with Session(c.app.state.db_engine) as db:
+        titles = lambda t: {p.title for p in board_service.search_posts(db, [t])}
+        assert titles("%") == {"할인 100% 후기"}
+        assert titles("_") == {"under_score"}

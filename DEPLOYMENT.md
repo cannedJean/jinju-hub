@@ -21,6 +21,7 @@
 - 시작: `uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"`
   (레이트리밋 키는 uvicorn이 고른 IP가 아니라 `app/core/ratelimit.py`의 `client_ip`: Render 프록시가 붙이는 `True-Client-IP` → 없으면 `X-Forwarded-For`의 **마지막** 항목 → 소켓 주소. XFF 맨 앞 값은 클라이언트가 위조할 수 있어 쓰지 않는다. Render에서는 XFF의 마지막 hop이 Cloudflare 엣지 IP라서 `True-Client-IP`를 우선하며, 이 헤더는 Render 프록시가 덮어쓴다(2026-11-05 라이브 검증, §4).)
 - 시크릿 입력(`sync: false`): `DATABASE_URL`, `WEATHER_API_KEY`, `ALLOWED_ORIGINS`(처음엔 비워 두거나 임시값). `ANTHROPIC_API_KEY`는 마지막 챗봇 테스트 때 추가.
+- 시드 글 비밀번호(`SEED_POST_PASSWORD`): 시드 글 8개의 게시판 비밀번호는 코드에 없다. Render 대시보드 > `jinjuhub-api` > Environment에서 `SEED_POST_PASSWORD`를 소유자가 직접 추가한다(값은 저장소·문서·채팅에 적지 않는다). 빌드 때 `seed_posts`가 이 값을 bcrypt로 해시해 저장한다. 미설정이면 실행마다 임의 비밀번호를 쓰며 출력·로그하지 않으므로 시드 글은 사실상 잠긴다. 시드는 제목이 이미 있으면 건너뛰므로 재배포해도 중복되지 않고, 이미 들어간 글의 비밀번호도 바뀌지 않는다. 예전 `demo1234`로 들어간 글은 Neon에서 해당 행을 삭제한 뒤 재배포하면 새 비밀번호로 다시 시드된다.
 - 확인: `https://jinjuhub-api.onrender.com/api/health` 200 (`{"status":"ok","data_version":...}`). 지역 Singapore. 게시판은 빌드의 alembic + 시드로 Neon에 시드 글 8개가 들어 있다.
 
 ### 1.3 Netlify (프론트)
