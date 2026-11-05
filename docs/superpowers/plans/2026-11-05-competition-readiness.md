@@ -20,7 +20,7 @@
 - 라이브 `https://jinjuhub-api.onrender.com/api/chat`에 요청을 보내지 않는다. 라이브 사이트에서 챗봇 추천 칩·전송 버튼, 게시판 제출을 누르지 않는다.
 - `.env` 계열 파일을 읽거나 출력하거나 커밋하지 않는다.
 - 백엔드·파이프라인 코드는 바꾸지 않는다. 필요해 보이면 보고서에 적는다.
-- 사용자에게 보이는 문구에는 코드·데이터·출처로 확인되는 사실만 쓴다. 금지어: `1호`, `최초`, `혼잡`, `빅데이터`(대회명 인용은 예외), 측정하지 않은 수치.
+- 사용자에게 보이는 문구에는 코드·데이터·출처로 확인되는 사실만 쓴다. 금지어: `1호`, `최초`, `혼잡`, 측정하지 않은 수치. `빅데이터`는 소유자 결정으로 제목에 유지한다(2026-11-05).
 - 데스크톱 우선 반응형. 유등 상태는 localStorage 키 `jinjuhub.lanterns.v1`에만 저장하고 최상위 `version: 1`을 유지한다.
 - 공공 이미지는 자르지 않는다(`object-contain`). OSM 출처 표기를 유지한다.
 - 하지 말 것: Safe Area 단독 수정, 첫 등불 배지 모달 복원, 레이트리밋·로그 마스킹 수정.
@@ -77,7 +77,7 @@ test('hero has no number when the report fails', async () => {
   expect(chips[0].text()).toBe('📊 공공데이터 통합·정제')
 })
 test('hero never makes unverifiable claims', () => {
-  expect(hero.text()).not.toMatch(/1호|최초|혼잡|빅데이터/)
+  expect(hero.text()).not.toMatch(/1호|최초|혼잡/)
 })
 test('first chip links to the data page', () => { /* to === '/about/data' */ })
 ```
@@ -87,7 +87,7 @@ test('first chip links to the data page', () => { /* to === '/about/data' */ })
 - [ ] **Step 3: 구현**
 
 `HomeView.vue` 문구(정확히 이대로):
-- H1: `공공데이터와 AI로 밝히는 진주의 밤 · 머무르고 싶은 여행`
+- H1(현재 문구 유지): `빅데이터와 AI로 밝히는 진주의 밤 · 머무르고 싶은 여행`
 - 부제(숫자 있음): `진주시·한국관광공사 공공데이터로 정리한 {n}곳과 실시간 날씨를 반영한 추천. 낮의 촉석루부터 밤의 유등까지 나만의 체류형 여정을 만들어 보세요.`
 - 부제(숫자 없음): `진주시·한국관광공사 공공데이터와 실시간 날씨를 반영한 추천. 낮의 촉석루부터 밤의 유등까지 나만의 체류형 여정을 만들어 보세요.`
 - 칩 1(`router-link` → `/about/data`): `📊 공공데이터 {s}종 → {n}곳 통합·정제`, 실패 시 `📊 공공데이터 통합·정제`
@@ -97,10 +97,10 @@ test('first chip links to the data page', () => { /* to === '/about/data' */ })
 - `{n}`은 `finalCount.toLocaleString('ko-KR')`.
 
 `index.html`(정적이므로 숫자 없음):
-- title, og:title, twitter:title: `JinjuHub | 공공데이터와 AI로 만나는 진주 관광`
+- title, og:title, twitter:title(현재 문구 유지): `JinjuHub | 빅데이터와 AI로 만나는 진주 관광`
 - description 3곳: `진주시와 한국관광공사 공공데이터를 통합·정제해 지도, 날씨, AI 여행 비서로 안내하는 진주 여행. 낮의 촉석루부터 밤의 유등까지.`
 
-- [ ] **Step 4: 통과 확인** — 같은 명령 → PASS. `e2e/live-smoke.spec.js`가 기대하는 홈 제목도 새 H1로 고친다.
+- [ ] **Step 4: 통과 확인** — 같은 명령 → PASS. `e2e/live-smoke.spec.js`가 기대하는 홈 제목을 현재 H1에 맞춘다.
 
 - [ ] **Step 5: 커밋** — `fix(home): replace unverifiable hero claims with report-backed copy (R-01 R-02 R-03)`
 
@@ -396,6 +396,6 @@ test('og:image points to a file that exists', () => {
 
 ## 이 계획에 없는 것 (별도 계획 필요)
 
-- 파이프라인: 촉석루·의암 중복 POI 병합, `night_view` 태그를 큐레이션 장소 10~15곳으로 확대, 요약문 절단 수정, DB 오프라인 재생성. 야간관광 서사를 받치려면 필요하다.
-- 제출물 작성: 신청서, 개요서, PPT.
+- 파이프라인(촉석루·의암 중복 POI, `night_view` 태그 확대, 요약문 절단): 데이터 병합 실패 위험 때문에 **진행하지 않기로 소유자가 결정했다**(2026-11-05).
+- 제출물 작성(신청서, 개요서, PPT): 홈페이지 완성 후 소유자가 별도로 진행한다.
 - 병합: 이 계획이 끝나고 재리뷰를 통과한 뒤 소유자 확인을 받아 `main`에 병합한다.

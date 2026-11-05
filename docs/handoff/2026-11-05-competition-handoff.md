@@ -46,9 +46,11 @@ JinjuHub는 이제 **경진대회 출품작**입니다. 목표는 수상입니�
 
 1. **수정 계획 실행:** `docs/superpowers/plans/2026-11-05-competition-readiness.md` (태스크 10개, `feat/frontend-polish`에서 진행).
 2. 실행 후 재리뷰 → 소유자 확인 → `main` 병합.
-3. 별도 계획이 필요한 것:
-   - 파이프라인: 촉석루·의암 중복 병합, 야경 태그 확대(현재 4곳), 요약문 절단. DB는 `python -m jinju_pipeline run --from-raw`로 오프라인 재생성하고 ID 집합이 그대로인지 확인합니다.
-   - 제출물: 신청서, 개요서, PPT. 수치는 `docs/competition/evidence.md`(계획 Task 10에서 생성)와 `backend/app/data/report.json`에서만 가져옵니다.
+3. 소유자 결정 (2026-11-05):
+   - 홈 제목의 "빅데이터" 표현은 유지합니다.
+   - 폰트는 CDN 대신 패키지로 직접 넣습니다.
+   - 파이프라인 수정(촉석루·의암 중복, 야경 태그 확대, 요약문 절단)은 데이터 병합 실패 위험 때문에 진행하지 않습니다. 시연에서 '밤의 남강' 배지는 진주성과 남가람 별빛길로 보여 줍니다.
+   - 제출물(신청서, 개요서, PPT)은 홈페이지 완성 후 소유자가 별도로 진행합니다. 수치는 `docs/competition/evidence.md`(계획 Task 10에서 생성)와 `backend/app/data/report.json`에서만 가져옵니다.
 
 ## 5. 규칙 (변함없음)
 
