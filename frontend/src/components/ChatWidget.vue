@@ -48,6 +48,7 @@ async function submit(text) {
   const message = String(text ?? '').trim()
   if (!message || loading.value) return
   input.value = ''
+  saveFailed.value = false
   await chat.send(message)
 }
 
