@@ -76,7 +76,7 @@ describe('429 rate_limited handling', () => {
     await w.find('select').setValue(w.find('select').findAll('option')[1].element.value)
     await w.find('input[type="text"]').setValue('제목')
     await w.find('textarea').setValue('내용')
-    await w.find('input[type="password"]').setValue('1234')
+    await w.find('input[type="password"]').setValue('123456')
     await w.find('form').trigger('submit')
     await flushPromises()
     expect(createPost).toHaveBeenCalled()
@@ -92,5 +92,32 @@ describe('429 rate_limited handling', () => {
     await flushPromises()
     expect(updatePost).toHaveBeenCalled()
     expect(w.text()).toContain(MSG)
+  })
+})
+
+describe('board password length', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  test('a new post needs at least 6 characters (the server rejects shorter ones)', async () => {
+    createPost.mockResolvedValue({ id: 9 })
+    const w = await mountAt(PostFormView, '/boards/new', '/boards/new')
+    await w.find('select').setValue(w.find('select').findAll('option')[1].element.value)
+    await w.find('input[type="text"]').setValue('제목')
+    await w.find('textarea').setValue('내용')
+    await w.find('input[type="password"]').setValue('12345')
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(createPost).not.toHaveBeenCalled()
+    expect(w.text()).toContain('6자 이상')
+  })
+
+  test('editing an existing post still accepts its 4-character password', async () => {
+    fetchPost.mockResolvedValue({ category: 'free', title: 't', content: 'c' })
+    updatePost.mockResolvedValue({ id: 1 })
+    const w = await mountAt(PostFormView, '/boards/1/edit', '/boards/:id/edit')
+    await w.find('input[type="password"]').setValue('1234')
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(updatePost).toHaveBeenCalled()
   })
 })

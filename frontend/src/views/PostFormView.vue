@@ -13,6 +13,8 @@ const authStore = usePostAuthStore()
 
 const categories = POST_CATEGORIES
 const isEdit = computed(() => route.name === 'post-edit')
+// new posts need 6+ characters (server rule); existing posts keep their older 4+ character passwords
+const minPwd = computed(() => (isEdit.value ? 4 : 6))
 
 const form = reactive({ category: '', title: '', content: '', password: '' })
 const fieldErrors = reactive({ category: '', title: '', content: '', password: '' })
@@ -69,8 +71,8 @@ function validate() {
     fieldErrors.content = '내용을 입력해 주세요.'
     valid = false
   }
-  if (!form.password || form.password.length < 4) {
-    fieldErrors.password = '비밀번호를 4자 이상 입력해 주세요.'
+  if (!form.password || form.password.length < minPwd.value) {
+    fieldErrors.password = `비밀번호를 ${minPwd.value}자 이상 입력해 주세요.`
     valid = false
   }
   return valid
@@ -184,13 +186,13 @@ onMounted(loadData)
             id="f-pwd"
             v-model="form.password"
             type="password"
-            minlength="4"
+            :minlength="minPwd"
             placeholder="••••••"
             class="w-full h-[46px] bg-page border border-border-input rounded-[10px] px-4 outline-none text-[15px] mb-2 focus:border-primary focus:ring-1 focus:ring-primary"
             :class="{ '!border-danger': fieldErrors.password }"
           />
           <p class="text-[12px] font-semibold" style="color: var(--cat-food)">
-            ⚠ 수정·삭제 시 필요합니다. 4자 이상 입력해 주세요.
+            ⚠ 수정·삭제 시 필요합니다. {{ minPwd }}자 이상 입력해 주세요.
           </p>
           <p v-if="fieldErrors.password" class="text-[13px] text-danger font-bold mt-1" aria-live="assertive">
             {{ fieldErrors.password }}
