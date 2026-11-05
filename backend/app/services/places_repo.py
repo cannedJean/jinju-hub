@@ -47,6 +47,7 @@ class PlaceText:
     overview_l: str
     addr_l: str
     has_image: bool = False
+    parking: str | None = None
     distance_m: int | None = None
 
 
@@ -227,10 +228,11 @@ class PlacesRepo:
                     is_collection=bool(r["is_collection"]), title_l=(r["title"] or "").lower(),
                     menu_l=(r["menu"] or "").lower(), overview_l=(r["overview"] or "").lower(),
                     addr_l=(r["addr"] or "").lower(), has_image=bool(r["hero_image"]),
+                    parking=r["parking"],
                 )
                 for r in self._con.execute(
                     "SELECT id, category, title, summary, addr, lat, lng, tags, jinju8_rank, is_collection, "
-                    "menu, overview, hero_image FROM places ORDER BY id")
+                    "menu, overview, hero_image, parking FROM places ORDER BY id")
             ]
         return self._chat_rows
 

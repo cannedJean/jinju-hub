@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass, field, replace
 from datetime import date
 from functools import lru_cache
-from typing import Literal, NamedTuple
+from typing import Callable, Literal, NamedTuple
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -66,6 +66,15 @@ STOP_WORDS = {
 }
 # A term directly followed by one of these words is a location (landmark/area), not the thing searched for.
 _LOCATION_MARKERS = ("근처", "주변", "부근", "옆", "가까운", "인근")
+_ENGLISH_LOCATION_MARKERS = {"near", "nearby", "around"}  # English puts the marker first: "food near 진주성"
+# English filler: it says how to ask, not what to find (an unknown English word is otherwise a real ask).
+_ENGLISH_STOP_WORDS = {
+    "a", "an", "the", "to", "in", "at", "of", "for", "and", "or", "with", "by", "on", "is", "are", "be", "any",
+    "some", "me", "i", "we", "you", "my", "our", "can", "could", "should", "want", "go", "visit", "where",
+    "what", "which", "how", "good", "best", "nice", "great", "famous", "popular", "recommend",
+    "recommendation", "recommendations", "please", "place", "places", "spot", "spots", "there", "here",
+    "jinju", "korea", "korean", "local", "tour", "trip", "travel", "today", "now", *_ENGLISH_LOCATION_MARKERS,
+}
 # A term directly followed by one of these words is excluded ("비빔밥 말고"): rows naming it are dropped.
 _NEGATION_MARKERS = ("말고", "빼고", "제외")  # "말고도" (= besides) is not a negation
 # Jinju's 읍/면 (a bare 면 suffix is not enough: 냉면, 볶음면 and 쫄면 are dishes); 동 names are matched by suffix.
@@ -83,8 +92,11 @@ _NOT_AREA_ENDINGS = ("활동", "운동", "행동", "이동", "감동", "자동",
 # Dish/type words (besides the TYPE_KEYWORDS keys) that identify what the user is looking for.
 _DISH_WORDS = {
     "국수", "칼국수", "순대", "삼겹살", "갈비", "장어", "치킨", "커피", "볶음면", "쫄면", "밀면", "짜장면", "라면",
-    "해장국", "설렁탕", "곰탕", "삼계탕", "한정식", "횟집", "빵", "디저트", "족발", "보쌈", "고기",
+    "해장국", "설렁탕", "곰탕", "삼계탕", "한정식", "횟집", "빵", "디저트", "족발", "보쌈", "고기", "술집",
 }
+# One-syllable words that are real search words: a particle or shop suffix may be stripped down to them
+# (빵집 -> 빵, 봄에 -> 봄).
+_ONE_CHAR_WORDS = {"빵", "봄", "꽃"}
 _SHOP_SUFFIXES = ("가게", "식당", "집")  # 냉면집 / 냉면가게 / 냉면식당 -> 냉면
 # Trailing particles stripped from a token when the remaining stem keeps at least 2 chars, or is a stop word
 # (곳은 -> 곳); longest first.
@@ -104,11 +116,17 @@ _W_EXACT_TITLE = 3.0  # extra when the whole (normalized) title is the term: the
 _W_HINT = 0.5  # implied terms (실내 -> 박물관 ...) rank but never outweigh the user's own words
 _ANCHOR_CAP_M = 5000  # anchored ("X 근처") results farther than this are not "near"
 _TAGGED_CATEGORIES = ("sight", "culture", "leisure")  # the only categories the indoor tag describes
+_SCENIC_CATEGORIES = ("sight", "leisure")
+# Bars: any drink word sets the food intent and becomes the 술집 term, which matches the whole group.
+DRINK_WORDS = ("술집", "주점", "호프", "맥주", "포차", "포장마차", "이자카야", "막걸리", "소주", "와인", "칵테일", "한잔",
+               "술")
+_PUB_GROUP = ("술집", "주점", "호프", "맥주", "포차", "포장마차", "이자카야", "막걸리", "와인")
 # Extra spellings a term also matches.
 _TERM_SYNONYMS = {
     "카페": ("커피", "cafe", "coffee"), "커피": ("카페", "cafe", "coffee"),
     "coffee": ("커피", "카페", "cafe"), "cafe": ("카페", "커피", "coffee"),
     "야경": ("야간", "조명"), "산책로": ("산책", "둘레길"),
+    "빵": ("베이커리", "bakery"), "가을": ("단풍",), "봄": ("벚꽃", "꽃"), "술집": _PUB_GROUP[1:],
 }
 # Terms that also match a curated tag (scored like a title hit).
 _TERM_TAGS = {"야경": "night_view", "야간": "night_view"}
@@ -117,18 +135,31 @@ INDOOR_HINTS = ("박물관", "전시", "미술관", "과학관", "기념관", "�
 # Intent lexicon: words that say what kind of outing it is, never searched as text. A token matches a word
 # when it starts with it and the rest is only particles ("밤에", "아이들과"); words in _LOOSE_PREFIX also match
 # longer forms ("먹을만한", "야간개장", "어린이날").
-NIGHT_WORDS = ("밤", "밤에", "야간", "야경")
+NIGHT_WORDS = ("밤", "밤에", "야간", "야경", "밤늦", "심야")
 FOOD_WORDS = ("밥", "식사", "먹")  # 먹: 먹을 / 먹고 / 먹지 / 먹어봐야
+ENGLISH_FOOD_WORDS = {"restaurant", "restaurants", "food", "foods", "eat", "eating", "dinner", "lunch",
+                      "breakfast", "brunch", "meal"}
+ENGLISH_DRINK_WORDS = {"bar", "bars", "pub", "pubs", "beer", "izakaya"}
 # Times of day: food intent only next to a food word, or when nothing else names an activity or target.
 TIME_WORDS = ("아침", "점심", "저녁")
 # Verb stems that name an outing rather than a meal ("저녁에 가볼 만한 곳", "아침에 산책").
-_ACTIVITY_PREFIXES = ("가볼", "갈만", "갈곳", "가기", "가고", "구경", "산책", "놀", "볼", "둘러", "보러", "데이트", "여행")
+_ACTIVITY_PREFIXES = ("가볼", "갈만", "갈곳", "가기", "가고", "구경", "산책", "놀", "볼", "둘러", "보러", "데이트", "여행",
+                      "뭐하", "뭐할", "할거리", "할것")
 # Scenic attributes: places describe them in prose, so an overview mention counts as a real match.
-SCENIC_TERMS = {"단풍", "벚꽃", "꽃", "철쭉", "억새", "노을", "일몰", "일출", "드라이브", "전망", "경치", "풍경", "둘레길"}
+SCENIC_TERMS = {"단풍", "벚꽃", "꽃", "철쭉", "억새", "노을", "일몰", "일출", "드라이브", "전망", "경치", "풍경", "둘레길",
+                "가을", "봄"}
 # Words that name a festival (kept first when a long message is capped).
 _FESTIVAL_SUFFIXES = ("축제", "예술제", "논개제", "페스티벌", "박람회", "대회", "한마당", "유등")
 KID_WORDS = ("아이", "아이들", "애들", "어린이", "아기", "키즈")
-_LOOSE_PREFIX = {"먹", "식사", "야간", "야경", "어린이", "아이들", "키즈"}
+_LOOSE_PREFIX = {"먹", "식사", "야간", "야경", "밤늦", "심야", "어린이", "아이들", "키즈", "한잔"}
+# Words that ask about facilities the data does or does not describe: never searched as text.
+PARKING_PREFIX = "주차"
+ACCESS_WORDS = ("휠체어", "유모차", "장애", "접근성", "계단")
+ACCESS_NOTE = "접근성(휠체어·유모차·계단) 정보는 데이터에 없음 · 이용하기 편하다고 단정하지 말고 방문 전 확인 권장"
+# Parking texts that carry no information ("전화문의", "-") or say there is none.
+_NO_PARKING_INFO = re.compile(r"[-\s]*|전화\s*문의.*|.*불가.*")
+# Only these keywords are suppressed inside a proper noun (국립진주박물관); 진주냉면 still asks for food.
+_CULTURE_KEYWORDS = {"박물관", "미술관", "기념관", "역사", "유적", "문화재"}
 NIGHT_HINTS = ("야경",)  # scored like a target (the user asked for it) with 야간/조명 and the night_view tag
 KID_HINTS = ("어린이", "체험", "박물관", "공원", "놀이")
 # Head nouns naming a kind of place: a compound that names nothing (전통시장, 도심공원) backs off to its head.
@@ -197,11 +228,14 @@ class Retrieval:
     today: date | None = None
     festival_note: str | None = None  # festival question but nothing ongoing/upcoming
     place_note: str | None = None  # anchored question whose terms matched nothing near the anchor
+    access_note: str | None = None  # accessibility question: the data has no such information
 
     def context(self) -> str:
         parts: list[str] = []
         if self.weather:
             parts.append(f"[날씨] {self.weather}")
+        if self.access_note:
+            parts.append(f"[참고] {self.access_note}")
         for group, header in (
             ("place", "[장소]"),
             ("festival", f"[축제 일정 · 오늘 {self.today}]" if self.today else "[축제 일정]"),
@@ -240,6 +274,11 @@ class _Query(NamedTuple):
     categories: list[str]  # category intents
     night: bool
     kids: bool
+    time_word: bool = False  # a time of day (아침/점심/저녁)
+    activity: bool = False  # an outing word (가볼, 산책, 구경 ...): the time of day is when, not a meal
+    generic_festival: bool = False  # 축제/행사 as a bare intent word (not inside a festival name)
+    parking: bool = False
+    access: bool = False
 
 
 def _strip_particle(tok: str) -> str:
@@ -247,9 +286,19 @@ def _strip_particle(tok: str) -> str:
         return tok
     for suffix in _PARTICLES:
         stem = tok[: -len(suffix)]
-        if tok.endswith(suffix) and (len(stem) >= 2 or stem in STOP_WORDS):
+        if tok.endswith(suffix) and (len(stem) >= 2 or stem in STOP_WORDS or stem in _ONE_CHAR_WORDS):
             return stem
     return tok
+
+
+def _strip_shop_suffix(tok: str) -> tuple[str, bool]:
+    """냉면집 / 냉면가게 -> (냉면, True); 빵집 -> (빵, True); 우리집 and 술집 stay whole."""
+    if tok not in _GENERIC_PLACES:
+        for suffix in _SHOP_SUFFIXES:
+            stem = tok[: -len(suffix)]
+            if tok.endswith(suffix) and (len(stem) >= 2 or stem in _ONE_CHAR_WORDS):
+                return stem, True
+    return tok, False
 
 
 def _only_particles(rest: str) -> bool:
@@ -271,16 +320,11 @@ def _is_negation(tok: str) -> bool:
 
 def _normalize_token(tok: str) -> tuple[str, bool] | None:
     """Lower-cased token -> (search term, shop-suffix stripped), or None when it is not searchable."""
-    shop = False
-    tok = _strip_particle(tok[:MAX_TERM_CHARS])
-    if tok not in _GENERIC_PLACES:  # 우리집 stays whole; 냉면집에서 -> 냉면
-        for suffix in _SHOP_SUFFIXES:
-            if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
-                tok, shop = tok[: -len(suffix)], True
-                break
-    if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
+    tok, shop = _strip_shop_suffix(_strip_particle(tok[:MAX_TERM_CHARS]))  # 냉면집에서 -> 냉면
+    if ((len(tok) < 2 and tok not in _ONE_CHAR_WORDS) or tok in STOP_WORDS or tok in INTENT_WORDS
+            or tok in _ENGLISH_STOP_WORDS):
         return None
-    if tok.startswith(("알려", "추천", "찾아", "보여")):
+    if tok.startswith(("알려", "추천", "찾아", "보여", "어디")):  # 어디예요, 어디가
         return None
     return tok, shop
 
@@ -288,11 +332,7 @@ def _normalize_token(tok: str) -> tuple[str, bool] | None:
 def _normalize_excluded(tok: str) -> str:
     """An excluded word is normalized like a search term (particle, then 집/가게/식당: 냉면집 -> 냉면), but kept
     even when it is an intent or stop word (축제 말고)."""
-    stem = _strip_particle(tok[:MAX_TERM_CHARS])
-    for suffix in _SHOP_SUFFIXES:
-        if stem.endswith(suffix) and len(stem) - len(suffix) >= 2:
-            return stem[: -len(suffix)]
-    return stem
+    return _strip_shop_suffix(_strip_particle(tok[:MAX_TERM_CHARS]))[0]
 
 
 def _is_proper_noun(stem: str, keyword: str, titles: list[str]) -> bool:
@@ -319,14 +359,15 @@ def _cap_terms(found: list[_Term]) -> list[_Term]:
 
 def _analyze_query(message: str, titles: list[str] | None = None) -> _Query:
     """One pass over the tokens. Negation is applied first, so a negated word never sets an intent; then the
-    intent lexicon (night / kids / food / time of day); then category keywords (not for a word used as a
-    location, "숙소 근처 맛집", nor inside a proper noun, "국립진주박물관"); the rest become search terms.
-    `titles` (lower-cased place titles) enables the proper-noun check."""
+    intent lexicon (night / kids / drinks / food / time of day / parking / accessibility); then category
+    keywords (not for a word used as a location, "숙소 근처 맛집", nor a culture keyword inside a proper noun,
+    "국립진주박물관"); the rest become search terms. `titles` (lower-cased place titles) enables the
+    proper-noun check."""
     toks = re.findall(r"[가-힣A-Za-z0-9]+", message.lower())
     found: dict[str, _Term] = {}
     excluded: list[str] = []
     cats: list[str] = []
-    night = kids = time_word = activity = False
+    night = kids = time_word = activity = generic_festival = parking = access = False
     for idx, tok in enumerate(toks):
         if _is_negation(tok):
             continue
@@ -343,27 +384,46 @@ def _analyze_query(message: str, titles: list[str] | None = None) -> _Query:
             kids = True
             continue
         bare = _strip_particle(tok)
-        if _lexicon_hit(tok, FOOD_WORDS) or any(bare == w + sfx for w in FOOD_WORDS for sfx in _SHOP_SUFFIXES):
-            cats.append("food")  # 먹을 / 식사 / 밥집 -> 밥
+        if (_lexicon_hit(tok, DRINK_WORDS) or _strip_shop_suffix(bare)[0] in DRINK_WORDS
+                or tok in ENGLISH_DRINK_WORDS):
+            cats.append("food")  # 한잔할 / 호프집 / 맥주: food, searched as the 술집 group
+            found.setdefault("술집", _Term("술집"))
+            continue
+        if (_lexicon_hit(tok, FOOD_WORDS) or tok in ENGLISH_FOOD_WORDS
+                or any(bare == w + sfx for w in FOOD_WORDS for sfx in _SHOP_SUFFIXES)):
+            cats.append("food")  # 먹을 / 식사 / 밥집 -> 밥 / dinner
             continue
         if _lexicon_hit(tok, TIME_WORDS):
             time_word = True
             continue
-        activity = activity or tok.startswith(_ACTIVITY_PREFIXES)
-        marked = nxt.startswith(_LOCATION_MARKERS)
-        if not marked:
-            cats += [code for kw, code in TYPE_KEYWORDS.items()
-                     if kw in tok and not (titles and _is_proper_noun(bare, kw, titles))]
+        if tok.startswith(PARKING_PREFIX):
+            parking = True
+            continue
+        if tok.startswith(ACCESS_WORDS):
+            access = True
+            continue
+        # "구경하고 점심": an outing done first (…하고, not …하고 싶은) does not make the question an outing
+        sequenced = tok.endswith(("고", "고서")) and not nxt.startswith("싶")
+        activity = activity or (tok.startswith(_ACTIVITY_PREFIXES) and not sequenced)
+        prev = toks[idx - 1] if idx else ""
+        marked = nxt.startswith(_LOCATION_MARKERS) or prev in _ENGLISH_LOCATION_MARKERS
         norm = _normalize_token(tok)
+        if not marked:
+            codes = [code for kw, code in TYPE_KEYWORDS.items() if kw in tok and not (
+                titles and kw in _CULTURE_KEYWORDS and _is_proper_noun(bare, kw, titles))]
+            cats += codes
+            generic_festival = generic_festival or ("festival" in codes and norm is None)
         if norm is None:
             continue
         term, shop = norm
         old = found.get(term)
         found[term] = _Term(term, bool(old and old.marked) or marked, bool(old and old.shop) or shop)
     terms = _cap_terms(list(found.values()))
-    if time_word and "food" not in cats and not (terms or cats or activity or night or kids):
-        cats.append("food")  # "저녁 추천해줘": a time of day alone means a meal
-    return _Query(terms, excluded, list(dict.fromkeys(cats)), night, kids)
+    if time_word and not (activity or night or kids or terms or cats):
+        cats.append("food")  # "저녁 추천해줘": a time of day alone means a meal (_retrieve also looks past
+        # location and filler words: "진주성 근처 점심", _time_means_meal)
+    return _Query(terms, excluded, list(dict.fromkeys(cats)), night, kids, time_word, activity, generic_festival,
+                  parking, access)
 
 
 def _detect_categories(message: str) -> list[str]:
@@ -426,9 +486,25 @@ def _reference_point(titled: list[PlaceText]) -> tuple[float, float]:
     return (sum(p.lat for p in titled) / len(titled), sum(p.lng for p in titled) / len(titled))  # type: ignore[misc]
 
 
+_CITY_BRANCH = "진주점"  # a chain's Jinju branch suffix (아웃백 진주점): never a word hit (주점 = pub)
+
+
+def _in_name(text_l: str, word: str) -> bool:
+    """`word` in a title or menu. A one-syllable word other than a dish counts only as a whole word:
+    '비봉산의 봄', not '누리봄' or '꽃갈비' ('단팥빵' is bread)."""
+    text = text_l.replace(_CITY_BRANCH, " ")
+    if len(word) == 1 and word not in _DISH_WORDS:
+        return re.search(rf"(?<![가-힣]){re.escape(word)}(?![가-힣])", text) is not None
+    return word in text
+
+
 def _in_title(title_l: str, word: str) -> bool:
     """`word` names this place, not only its branch: '롯데하이마트 진주성점' is not about 진주성."""
-    return word in title_l.replace(word + "점", "")
+    return _in_name(title_l.replace(word + "점", ""), word)
+
+
+def _in_text(text_l: str, word: str) -> bool:
+    return word in text_l.replace(_CITY_BRANCH, " ")
 
 
 def _hit_weight(row: PlaceText, term: str, area: bool) -> float:
@@ -436,9 +512,9 @@ def _hit_weight(row: PlaceText, term: str, area: bool) -> float:
 
     `area`: the term is a 동/읍/면 name, so an address hit counts too."""
     words = (term, *_TERM_SYNONYMS.get(term, ()))
-    if any(_in_title(row.title_l, w) or w in row.menu_l for w in words) or _TERM_TAGS.get(term) in row.tags:
+    if any(_in_title(row.title_l, w) or _in_name(row.menu_l, w) for w in words) or _TERM_TAGS.get(term) in row.tags:
         return _W_TITLE + (_W_EXACT_TITLE if _norm_title(row.title_l) == term else 0.0)
-    if any(w in row.overview_l for w in words) or (area and term in row.addr_l):
+    if any(_in_text(row.overview_l, w) for w in words) or (area and term in row.addr_l):
         return _W_OVERVIEW
     return 0.0
 
@@ -446,8 +522,13 @@ def _hit_weight(row: PlaceText, term: str, area: bool) -> float:
 def _mentions(row: PlaceText, word: str) -> bool:
     """`word` or a synonym in the title, menu or overview, or its tag: an excluded word drops such rows."""
     words = (word, *_TERM_SYNONYMS.get(word, ()))
-    return (any(_in_title(row.title_l, w) or w in row.menu_l or w in row.overview_l for w in words)
+    return (any(_in_title(row.title_l, w) or _in_name(row.menu_l, w) or _in_text(row.overview_l, w) for w in words)
             or _TERM_TAGS.get(word) in row.tags)
+
+
+def _has_parking_info(row: PlaceText) -> bool:
+    text = (row.parking or "").strip()
+    return bool(text) and not _NO_PARKING_INFO.fullmatch(text)
 
 
 def _quality_tier(p: PlaceText) -> int:
@@ -460,6 +541,13 @@ def _quality_tier(p: PlaceText) -> int:
 def _names_anywhere(repo: PlacesRepo, term: str) -> bool:
     scenic = term in SCENIC_TERMS
     return any((w := _hit_weight(r, term, False)) >= _W_TITLE or (scenic and w > 0) for r in repo.chat_rows())
+
+
+def _is_real_target(repo: PlacesRepo, t: _Term) -> bool:
+    """A word the user is looking for, not filler: a dish/shop word, an English word (one we do not know is
+    never silently answered with something else: "진주성 근처 bakery"), or a word that names a place somewhere."""
+    return (_is_dish_word(t.text) or t.shop or (t.text.isascii() and t.text.isalpha())
+            or _names_anywhere(repo, t.text))
 
 
 def _in_scope(row: PlaceText, categories: list[str], tags: list[str]) -> bool:
@@ -493,6 +581,7 @@ class _Ranked(NamedTuple):
 def _rank_places(
     repo: PlacesRepo, categories: list[str], terms: list[_Term], tags: list[str], specific_only: bool = False,
     hints: tuple[str, ...] = (), anchor: PlaceText | None = None, festival_intent: bool = False,
+    keep: Callable[[PlaceText], bool] | None = None,
 ) -> _Ranked:
     """Places for the question.
 
@@ -505,6 +594,8 @@ def _rank_places(
     A question whose target words hit no title, menu or tag (overview mentions only: "처음 오는데") counts
     as unmatched and gets the curated, target-less order. `hints` (implied by the question: 밤, 아이랑, 실내)
     score softly when no category is asked. Festival rows are places only with `festival_intent`.
+    Scenic words alone (단풍, 가을) look among sights and leisure (culture only when those have none). `keep`
+    limits the candidate rows (the anchor is still resolved over every row).
     `anchor` (a festival venue) is used as given. `specific_only` (festival questions): keep only title/menu
     hits and never fall back to a generic list.
     """
@@ -514,7 +605,8 @@ def _rank_places(
         categories = list(_TAGGED_CATEGORIES)
     excluded = [t.text for t in terms if t.excluded]
     terms = [t for t in terms if not t.excluded]
-    scope = [r for r in repo.chat_rows() if _in_scope(r, categories, tags)
+    rows = [r for r in repo.chat_rows() if keep is None or keep(r)]
+    scope = [r for r in rows if _in_scope(r, categories, tags)
              and (festival_intent or r.category != "festival")
              and not any(_mentions(r, x) for x in excluded)]
 
@@ -583,6 +675,12 @@ def _rank_places(
     matched = any(names_something(t) for t in target_terms)
     if not matched:
         target_terms = []
+    if not asked_categories and matched and all(t in SCENIC_TERMS for t in target_terms if names_something(t)):
+        # Scenery is a sight's attribute: sights and leisure first, culture only when they have none (a book
+        # printed "in autumn" is not an autumn outing), never restaurants or hotels.
+        hit_ids = {i for t in target_terms for i in hits_for(t)}
+        outdoor = {r.id for r in scope if r.category in _SCENIC_CATEGORIES} & hit_ids & near
+        near &= outdoor or {r.id for r in scope if r.category in _TAGGED_CATEGORIES}
     focus = [t.text for t in targets if (_is_dish_word(t.text) or t.shop) and t.text in target_terms]
     # With an anchor, distance handles proximity: the location words' text hits do not score.
     location_terms = [] if anchor is not None else [t.text for t in locations if t.text not in _HOME_WORDS]
@@ -633,16 +731,17 @@ def _rank_places(
     # (staying within food for a dish).
     fb_scope = scope
     if any(_is_dish_word(t.text) or t.shop for t in targets) and not asked_categories:
-        fb_scope = [r for r in repo.chat_rows() if r.category == "food" and not any(_mentions(r, x) for x in excluded)]
-    # Say "nothing matched near X" only when a target is a real thing elsewhere (국밥), not filler (보고, 나서).
-    ok = matched or not any(_names_anywhere(repo, t.text) for t in targets)
+        fb_scope = [r for r in rows if r.category == "food" and not any(_mentions(r, x) for x in excluded)]
+    # Say "nothing matched near X" only when a target is a real thing elsewhere (국밥) or an English word we
+    # do not know, never for filler (보고, 나서).
+    ok = matched or not any(_is_real_target(repo, t) for t in targets)
     if anchor is not None:
         # The nearest places within the cap; places far from the anchor are never presented as "near" it.
         fb_dist = {r.id: d for r in fb_scope if r.lat is not None and r.lng is not None
                    and (d := _haversine_m(anchor.lat, anchor.lng, r.lat, r.lng)) <= _ANCHOR_CAP_M}
         found = _nearby_order([r for r in fb_scope if r.id in fb_dist], fb_dist)[:MAX_PLACES]
         return _Ranked([replace(r, distance_m=round(fb_dist[r.id])) for r in found], anchor, ok)
-    found = _collection_order(fb_scope) or _collection_order(repo.chat_rows())
+    found = _collection_order(fb_scope) or _collection_order(rows)
     return _Ranked(found[:MAX_PLACES], anchor, ok, tuple(unresolved))
 
 
@@ -703,6 +802,35 @@ def _place_line(
     return line, brief
 
 
+def _time_means_meal(q: _Query, repo: PlacesRepo, festivals: dict[str, list[dict]]) -> bool:
+    """A time of day reads as a meal when nothing else says what to find: every term says where (a location,
+    a landmark, a festival name) or names nothing (filler): "진주성 근처 점심", "유등축제 보고 저녁". An outing
+    word, the night, another category or a bare 축제 question ("저녁에 하는 축제") keep it a time."""
+    if (not q.time_word or q.activity or q.night or q.generic_festival or not q.terms
+            or any(c != "festival" for c in q.categories)):
+        return False
+
+    def says_where(t: _Term) -> bool:
+        return (t.marked or _has_location_shape(t.text) or t.text in _HOME_WORDS or t.text in festivals
+                or _resolve_landmark(repo, t.text, strict=True) is not None)
+    where = [t for t in q.terms if says_where(t)]
+    rest = [t for t in q.terms if t not in where]
+    # with a child along, only a named place makes it a meal ("아이랑 진주성 근처 저녁")
+    return (bool(where) or not q.kids) and not any(_names_anywhere(repo, t.text) for t in rest)
+
+
+def _rank_for(q: _Query, repo: PlacesRepo, **kw) -> _Ranked:
+    """_rank_places, preferring rows with parking information when the question asks about parking."""
+    ranked = _rank_places(repo, **kw)
+    if not q.parking:
+        return ranked
+    preferred = _rank_places(repo, keep=_has_parking_info, **kw)
+    if not (preferred.places and preferred.matched):
+        return ranked
+    ids = {p.id for p in preferred.places}
+    return preferred._replace(places=(preferred.places + [p for p in ranked.places if p.id not in ids])[:MAX_PLACES])
+
+
 def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retrieval:
     q = _analyze_query(message, _titles_l(repo))
     cats = q.categories
@@ -712,7 +840,13 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
     hints = ((NIGHT_HINTS if q.night else ()) + (KID_HINTS if q.kids else ()) + (INDOOR_HINTS if tags else ()))
     fest_rows = {r["id"]: r for r in repo.festival_rows()}
     named = _named_festivals(repo, analyzed, fest_rows)
+    if _time_means_meal(q, repo, named):
+        cats = [*cats, "food"]
     want_festival = "festival" in cats or bool(named)
+    if want_festival:
+        # A festival question searches places for the night only next to a named festival ("유등축제 보고 야경");
+        # "밤에 하는 축제", "아이랑 갈 축제" and "비 오는데 축제" ask about festivals, not other places.
+        hints = NIGHT_HINTS if q.night and named else ()
     search_terms = [t for t in analyzed if t.text not in named] + [_Term(x, excluded=True) for x in q.excluded]
     search_cats = [c for c in cats if c != "festival"]
     # "유등축제 근처 맛집" / "유등축제 맛집": a named festival next to a location marker or a category intent
@@ -723,14 +857,14 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
             venue = next((v for r in named[t.text] if (v := _festival_venue(repo, r)) is not None), None)
             if venue is not None:
                 break
-    out = Retrieval(today=today)
+    out = Retrieval(today=today, access_note=ACCESS_NOTE if q.access else None)
 
     # A festival question searches places only for a category it asks for or what else it names specifically
     # (never a generic list).
     if not want_festival or search_terms or search_cats or hints:
-        places, anchor, matched, unresolved = _rank_places(
-            repo, search_cats, search_terms, tags, specific_only=want_festival and not search_cats,
-            hints=hints, anchor=venue, festival_intent=want_festival)
+        places, anchor, matched, unresolved = _rank_for(
+            q, repo, categories=search_cats, terms=search_terms, tags=tags,
+            specific_only=want_festival and not search_cats, hints=hints, anchor=venue, festival_intent=want_festival)
         anchor_name = _clean(anchor.title).split("(")[0].strip() if anchor is not None else ""
         if unresolved:
             out.place_note = (f"'{unresolved[0]}' 위치를 찾지 못함 · 거리 기준 없이 보여 줌" if places
@@ -738,9 +872,13 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
         elif anchor is not None and not matched and not want_festival:
             out.place_note = f"{anchor_name} {_ANCHOR_CAP_M // 1000}km 안에서 질문과 일치하는 곳을 찾지 못함" + (
                 " · 가까운 곳을 대신 보여 줌" if places else "")
+        elif anchor is None and not matched and places:
+            out.place_note = "질문과 일치하는 곳을 찾지 못함 · 대표 장소를 대신 보여 줌"
         for p in places:
             near = f"{anchor_name}에서 {_format_distance(p.distance_m)}" if p.distance_m is not None else None
             line, brief = _place_line(p.id, p.title, p.category, p.addr, p.summary, fest_rows.get(p.id), today, near)
+            if q.parking and _has_parking_info(p):
+                line += f" | 주차: {_clean(p.parking, 120)}"
             out.items.append(_Item("place", "place", p.id, p.title, line, brief))
 
     if want_festival:
@@ -796,7 +934,7 @@ async def build_context(
 
 
 def _fallback_answer(r: Retrieval) -> str:
-    if not r.items and not r.weather and not r.place_note:
+    if not r.items and not r.weather and not r.place_note and not r.access_note:
         return (
             "요청하신 내용과 일치하는 정보를 진주 여행 데이터에서 찾지 못했어요. "
             "장소 이름이나 카테고리(맛집, 숙박, 축제 등)를 포함해 다시 질문해 주세요."
@@ -804,6 +942,8 @@ def _fallback_answer(r: Retrieval) -> str:
     parts: list[str] = []
     if r.weather:
         parts.append(f"현재 날씨: {r.weather}")
+    if r.access_note:
+        parts.append(f"참고: {r.access_note}")
     if r.place_note:
         parts.append(f"참고: {r.place_note}")
     for group, head in (("place", "관련 장소"), ("festival", "축제 일정"), ("post", "관련 게시글")):

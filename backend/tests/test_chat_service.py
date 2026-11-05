@@ -915,3 +915,139 @@ def test_any_meok_form_sets_food_intent():
 def test_filler_words_do_not_claim_nothing_matched_near_the_anchor(real_like_repo, db):
     ret = chat_service._retrieve("진주성 보고 나서 근처 냉면집", real_like_repo, db, TODAY)
     assert "찾지 못함" not in ret.context()
+
+
+# ---- fix round 4 ----
+
+def test_time_word_next_to_a_location_means_food_near_it(real_like_repo, db):
+    for msg in ("진주성 근처 점심", "촉석루 근처 저녁 어디가 좋아?", "진주성 점심"):
+        ret = chat_service._retrieve(msg, real_like_repo, db, TODAY)
+        places = [i for i in ret.items if i.group == "place"]
+        assert places and all(i.id.startswith(("f-", "c-")) for i in places), (msg, [i.title for i in places])
+    # an outing word still wins over the meal reading
+    assert "food" not in chat_service._detect_categories("진주성 근처 저녁 산책")
+
+
+def test_proper_noun_suppression_only_for_culture_keywords():
+    titles = ["국립진주박물관", "진주냉면산홍 본점"]
+    assert chat_service._analyze_query("진주냉면 추천", titles).categories == ["food"]
+    assert chat_service._analyze_query("국립진주박물관 휴관일", titles).categories == []
+
+
+def test_drink_words_mean_food_and_match_the_pub_group():
+    q = chat_service._analyze_query("축제 끝나고 한잔할 술집 추천")
+    assert "food" in q.categories
+    assert "술집" in [t.text for t in q.terms]
+    assert "food" in chat_service._analyze_query("맥주 마시기 좋은 곳").categories
+    pub = _place_text(title="동네 이자카야")
+    branch = _place_text(title="아웃백스테이크하우스 진주점", overview="롯데몰 진주점 안에 있다")
+    assert chat_service._hit_weight(pub, "술집", False) >= chat_service._W_TITLE
+    assert chat_service._hit_weight(branch, "주점", False) == 0.0  # 진주점 is a branch, not a 주점
+
+
+def test_english_food_words_set_food_intent():
+    for msg in ("restaurant 추천", "good food", "where to eat", "dinner", "lunch near 진주성"):
+        assert chat_service._detect_categories(msg) == ["food"], msg
+    assert chat_service._search_terms("진주성 근처 restaurant") == ["진주성"]
+
+
+def test_shop_suffix_may_leave_a_one_char_dish_or_season():
+    assert chat_service._analyze_terms("빵집 어디예요") == [chat_service._Term("빵", shop=True)]
+    assert chat_service._search_terms("봄에 가볼 곳") == ["봄"]
+    assert chat_service._search_terms("가을에 가볼 곳") == ["가을"]
+
+
+def test_seasons_are_scenic_synonyms():
+    maple = _place_text(overview="단풍이 아름답다")
+    blossom = _place_text(overview="벚꽃 명소")
+    assert chat_service._hit_weight(maple, "가을", False) > 0
+    assert chat_service._hit_weight(blossom, "봄", False) > 0
+    assert chat_service._hit_weight(maple, "봄", False) == 0
+
+
+def test_late_night_words_set_night():
+    for msg in ("밤늦게 갈 곳", "밤늦은 시간 식당", "심야 식당"):
+        assert chat_service._analyze_query(msg).night, msg
+
+
+def test_generic_festival_question_returns_no_places(real_like_repo, db):
+    for msg in ("밤에 하는 축제 있어?", "아이랑 갈 만한 축제 있어?", "비 오는데 축제 하나요?"):
+        ret = chat_service._retrieve(msg, real_like_repo, db, TODAY)
+        assert not [i for i in ret.items if i.group == "place"], msg
+
+
+def test_parking_question_prefers_rows_with_parking_info(tmp_path, db):
+    rows = [(f"s-{k}", "sight", f"명소{k}", "볼거리", "x", 35.1, 128.1, None, None) for k in range(4)]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        import sqlite3
+        con = sqlite3.connect(r._con.execute("PRAGMA database_list").fetchone()[2])
+        con.execute("UPDATE places SET parking='전화문의' WHERE id='s-0'")
+        con.execute("UPDATE places SET parking='가능 (소형 약 20대) 무료' WHERE id='s-3'")
+        con.commit()
+        con.close()
+        ret = chat_service._retrieve("주차하기 편한 관광지", r, db, TODAY)
+        places = [i for i in ret.items if i.group == "place"]
+        assert places[0].id == "s-3"
+        assert "주차: 가능 (소형 약 20대) 무료" in places[0].line
+        assert "주차" not in "".join(i.line for i in places[1:])
+        assert not any(t.startswith("주차") for t in chat_service._search_terms("주차하기 편한 관광지"))
+    finally:
+        r.close()
+
+
+def test_accessibility_question_gets_a_not_available_note(real_like_repo, db):
+    ret = chat_service._retrieve("휠체어나 유모차로 다니기 편한 곳 있을까요?", real_like_repo, db, TODAY)
+    assert "접근성" in ret.context() and "없음" in ret.context()
+    assert "접근성" not in chat_service._retrieve("진주성 근처 냉면", real_like_repo, db, TODAY).context()
+
+
+def test_unknown_english_word_near_an_anchor_is_noted(real_like_repo, db):
+    ret = chat_service._retrieve("진주성 근처 bakery", real_like_repo, db, TODAY)
+    assert "찾지 못함" in ret.context()
+
+
+def _place_text(title="이름", overview="", menu="", category="food"):
+    from app.services.places_repo import PlaceText
+    return PlaceText(id="x", category=category, title=title, summary=None, addr=None, lat=None, lng=None, tags=(),
+                     jinju8_rank=None, is_collection=False, title_l=title.lower(), menu_l=menu.lower(),
+                     overview_l=overview.lower(), addr_l="")
+
+
+def test_english_filler_and_near_marker(real_like_repo, db):
+    assert chat_service._analyze_terms("good food near 진주성") == [chat_service._Term("진주성", marked=True)]
+    ret = chat_service._retrieve("good food near 진주성", real_like_repo, db, TODAY)
+    places = [i for i in ret.items if i.group == "place"]
+    assert places and all(i.id.startswith(("f-", "c-")) for i in places) and "찾지 못함" not in ret.context()
+
+
+def test_one_syllable_word_names_a_place_only_as_a_whole_word():
+    assert chat_service._hit_weight(_place_text(title="비봉산의 봄"), "봄", False) >= chat_service._W_TITLE
+    assert chat_service._hit_weight(_place_text(title="누리봄 농장"), "봄", False) == 0.0
+    assert chat_service._hit_weight(_place_text(menu="꽃갈비"), "꽃", False) == 0.0
+    assert chat_service._hit_weight(_place_text(title="수복빵집"), "빵", False) >= chat_service._W_TITLE
+
+
+def test_scenic_words_alone_look_among_sights(tmp_path):
+    rows = [
+        ("f-flower", "food", "꽃 식당", "꽃이 핀 정원", "x", 35.1, 128.1, None, None),
+        ("s-flower", "sight", "꽃 동산", "꽃이 핀 언덕", "x", 35.1, 128.1, None, None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, [], chat_service._analyze_terms("꽃 구경하기 좋은 곳"), [])
+        assert [p.id for p in found] == ["s-flower"]
+    finally:
+        r.close()
+
+
+def test_an_outing_done_first_does_not_block_the_meal():
+    q = chat_service._analyze_query("진주성 구경하고 점심")
+    assert q.time_word and not q.activity
+    assert chat_service._analyze_query("진주성 구경하고 싶은데 저녁").activity
+    assert chat_service._analyze_query("오늘 저녁 뭐하지").activity
+
+
+def test_drink_question_without_bars_says_nothing_matched(real_like_repo, db):
+    ret = chat_service._retrieve("술집 추천", real_like_repo, db, TODAY)
+    assert "찾지 못함" in ret.context()

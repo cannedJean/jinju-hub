@@ -393,6 +393,88 @@ def _no_crash(ret, places, rows):
     return True, f"{len(places)} places"
 
 
+# ---- fix round 4 (controller-defined rows) ----
+
+def _food_all_near(ref_ids, max_m, n, label=True):
+    """At least n food rows, and every food row within max_m of one of ref_ids (labelled with a distance)."""
+    def check(ret, places, rows):
+        lines = _place_lines(ret)
+        refs = [rows[i] for i in ref_ids(rows)] if callable(ref_ids) else [rows[i] for i in ref_ids]
+        food = [p for p in places if p["category"] == "food"]
+        far = [p["title"] for p in food if min(_dist(r, p) for r in refs) > max_m]
+        unlabelled = [p["title"] for p in food if label and not LABEL.search(lines[p["id"]])]
+        return len(food) >= n and not far and not unlabelled, f"{len(food)} food, far={far} unlabelled={unlabelled}"
+    return check
+
+
+def _lantern_venues(rows):
+    import json
+    return json.loads(rows[LANTERN_FESTIVAL]["venue_place_ids"])
+
+
+def _lantern_dinner(ret, places, rows):
+    if LANTERN_FESTIVAL not in {i.id for i in ret.items}:
+        return False, "진주남강유등축제 row missing"
+    return _food_all_near(_lantern_venues, 2000, 3)(ret, places, rows)
+
+
+def _festival_only(no_culture_only=False):
+    def check(ret, places, rows):
+        fest = [i for i in ret.items if i.group == "festival"]
+        if not fest and "축제 없음" not in ret.context():
+            return False, "festival group empty without a note"
+        if no_culture_only:
+            bad = [p["title"] for p in places if p["category"] == "culture" or "박물관" in p["title"]]
+            return not bad, f"museum/culture={bad}"
+        return not places, f"places={[p['title'] for p in places]}"
+    return check
+
+
+def _food_matching(pattern, n):
+    rx = re.compile(pattern)
+
+    def check(ret, places, rows):
+        wrong = [p["title"] for p in places if p["category"] != "food"]
+        good = [p for p in places if rx.search(_text(p, "title", "menu", "overview").replace("진주점", ""))]
+        return bool(places) and not wrong and len(good) >= n, f"not food={wrong}, {len(good)} match {pattern}"
+    return check
+
+
+def _pubs(ret, places, rows):
+    # "진주점" is a branch suffix (아웃백 진주점), not a 주점.
+    food = [p for p in places if p["category"] == "food"
+            and re.search("주점|호프|맥주|포차|술집|이자카야", _text(p, "title", "menu", "overview").replace("진주점", ""))]
+    return len(food) >= 3, f"{len(food)} food rows match a pub word"
+
+
+def _bakeries(ret, places, rows):
+    good = [p for p in places if re.search("빵|베이커리", _text(p, "title", "menu", "overview"))]
+    return len(good) >= 3, f"{len(good)} match 빵/베이커리"
+
+
+def _autumn(ret, places, rows):
+    spring = [p["title"] for p in places if "봄" in p["title"]]
+    good = [p for p in places if re.search("단풍|가을", _text(p, "title", "overview"))]
+    return not spring and len(good) >= 2, f"봄 titles={spring}, {len(good)} mention 단풍/가을"
+
+
+def _has_parking(p):
+    return bool((p["parking"] or "").strip().strip("-").strip())
+
+
+def _parking_sights(ret, places, rows):
+    lines = _place_lines(ret)
+    good = [p for p in places if p["category"] in ("sight", "culture") and _has_parking(p)
+            and re.sub(r"\s+", " ", p["parking"]).strip()[:20] in lines[p["id"]]]
+    return len(good) >= 3, f"{len(good)} sight/culture with parking text in the line"
+
+
+def _accessibility_note(ret, places, rows):
+    ctx = ret.context()
+    ok = bool(re.search(r"접근성[^\n]*(없|않)", ctx))
+    return ok, "" if ok else "no accessibility note"
+
+
 CASES = [
     # built-in suggestion chips (frontend/src/data/chatSuggestions.js)
     ("chip", "진주성 근처 냉면집 알려줘", _naengmyeon_near_castle),
@@ -454,13 +536,44 @@ CASES = [
     ("R3", "진주썽 근처 맛집", _typo_castle),
     ("R3", "진주성이랑 국립진주박물관 둘 다 보고 근처에서 묶어서 볼 만한 곳", _castle_and_museum),
     ("C5", "진주 " * 200 + "냉면 국밥 비빔밥 카페 숙소 축제 야경 박물관", _no_crash),
+    # fix round 4 (controller-defined rows)
+    ("R4", "진주성 근처 점심", _food_all_near((CASTLE,), 2000, 3)),
+    ("R4", "유등축제 보고 저녁", _lantern_dinner),
+    ("R4", "남강 근처 저녁 추천", _min_category("food", 3)),
+    ("R4", "밤에 하는 축제 있어?", _festival_only()),
+    ("R4", "비 오는데 축제 하나요?", _festival_only(no_culture_only=True)),
+    ("R4", "진주냉면 추천", _food_matching("냉면", 3)),
+    ("R4", "진주성 근처 restaurant 추천해줘", _food_all_near((CASTLE,), 2000, 3)),
+    ("R4", "진주에 유명한 빵집 어디예요?", _bakeries),
+    ("R4", "가을에 가볼 만한 곳 추천해줘", _autumn),
+    ("R4", "주차하기 편한 관광지 알려주세요", _parking_sights),
+    ("R4", "휠체어나 유모차로 다니기 편한 곳 있을까요?", _accessibility_note),
+]
+
+
+# Controller-defined rows the committed data cannot satisfy honestly. Kept failing (strict xfail): a row that
+# starts passing means the data or the retrieval changed and the row should move into CASES.
+# - Pubs: the whole DB has ONE food row naming a pub word (소담원, "음료와 맥주" in its overview); every other
+#   "주점" hit is a chain's "진주점" branch suffix (아웃백스테이크하우스 진주점). Retrieval answers with
+#   a "nothing matched" note instead of presenting branches or generic restaurants as bars.
+DATA_LIMITED = [
+    ("R4", "축제 끝나고 한잔할 술집 추천", _pubs),
 ]
 
 
 def test_golden_retrieval_on_real_db(env):
+    _run(CASES, env)
+
+
+@pytest.mark.xfail(strict=True, reason="data limit: one food row in places.db names a pub word (see DATA_LIMITED)")
+def test_golden_rows_the_data_cannot_satisfy(env):
+    _run(DATA_LIMITED, env)
+
+
+def _run(cases, env):
     repo, session, rows = env
     table, failures = [], []
-    for kind, msg, check in CASES:
+    for kind, msg, check in cases:
         try:
             ret = chat_service._retrieve(msg, repo, session, TODAY)
             places = [rows[i.id] for i in ret.items if i.group == "place"]
