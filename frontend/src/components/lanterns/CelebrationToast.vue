@@ -26,7 +26,7 @@ watch(
   () => lanterns.litCount,
   (n, prev) => {
     if (n === 1 && prev === 0 && !isRestoring() && !lanterns.earnedBadges.first_light) {
-      showToast('첫 유등을 밝혔어요!')
+      showToast('🎉 첫 유등을 밝혔어요! 배지가 보관함에 추가되었어요')
     }
   },
   { flush: 'sync' },
