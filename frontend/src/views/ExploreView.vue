@@ -54,14 +54,29 @@ const insetBottom = computed(() => {
 
 // ---------- feedback: toast + screen-reader announcements ----------
 const toast = ref('')
+const undoPlace = ref(null)
 const announcement = ref('')
 let toastTimer = null
-function showToast(message) {
+function showToast(message, undo = null) {
   toast.value = message
+  undoPlace.value = undo
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {
     toast.value = ''
-  }, 2400)
+    undoPlace.value = null
+  }, undo ? 4000 : 2400)
+}
+
+function undoUnsave() {
+  if (undoPlace.value) {
+    const item = undoPlace.value
+    lanterns.restore(item)
+    const title = item.title || '장소'
+    undoPlace.value = null
+    toast.value = ''
+    clearTimeout(toastTimer)
+    showToast(`◇ ‘${title}’ 다시 담았어요`)
+  }
 }
 
 // ---------- list (GET /api/places) ----------
@@ -234,8 +249,9 @@ function toggleSave(placeOrId) {
   const id = typeof placeOrId === 'string' ? placeOrId : placeOrId?.id
   if (!id || lanterns.isLit(id)) return
   if (lanterns.isSaved(id)) {
+    const snap = lanterns.items[id] ? { ...lanterns.items[id] } : (findSummary(id) || { id, title: id })
     lanterns.unsave(id)
-    showToast('담기를 취소했어요')
+    showToast('담기를 취소했어요', snap)
     return
   }
   const summary = typeof placeOrId === 'object' ? placeOrId : findSummary(id)
@@ -539,11 +555,20 @@ onBeforeUnmount(() => {
       <Transition name="toast">
         <div
           v-if="toast"
-          class="toast absolute left-1/2 z-[600] rounded-full bg-night-900 text-white text-[13px] font-bold px-4 py-2 shadow-lg whitespace-nowrap"
+          class="toast absolute left-1/2 z-[600] rounded-full bg-night-900 text-white text-[13px] font-bold px-4 py-2 shadow-lg whitespace-nowrap flex items-center gap-2"
           :style="{ bottom: `${insetBottom + 16}px` }"
           role="status"
         >
-          {{ toast }}
+          <span>{{ toast }}</span>
+          <button
+            v-if="undoPlace"
+            type="button"
+            data-test="toast-undo"
+            class="text-lantern-500 font-extrabold underline underline-offset-2 ml-1"
+            @click="undoUnsave"
+          >
+            실행 취소
+          </button>
         </div>
       </Transition>
 
