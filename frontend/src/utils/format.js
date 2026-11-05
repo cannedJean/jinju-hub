@@ -1,5 +1,6 @@
 export const CATEGORY_LABELS = {
   sight: '명소',
+  tour: '명소',
   culture: '문화·역사',
   food: '맛집',
   stay: '숙박',
