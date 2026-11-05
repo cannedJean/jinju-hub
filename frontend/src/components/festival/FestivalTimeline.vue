@@ -44,29 +44,31 @@ const todayPct = computed(() => {
 <template>
   <section aria-label="올해 축제 일정" class="bg-card border border-border rounded-xl p-4">
     <h2 class="text-[15px] font-extrabold text-strong mb-3">{{ year }}년 축제 일정</h2>
-    <div class="relative">
-      <div class="grid grid-cols-12 text-[11px] text-muted text-center border-b border-border pb-1">
-        <span v-for="m in MONTHS" :key="m">{{ m }}</span>
+    <div class="overflow-x-auto pb-2">
+      <div class="relative min-w-[640px]">
+        <div class="grid grid-cols-12 text-[11px] text-muted text-center border-b border-border pb-1">
+          <span v-for="m in MONTHS" :key="m">{{ m }}</span>
+        </div>
+        <div
+          v-if="todayPct !== null"
+          class="absolute top-0 bottom-0 w-px bg-danger"
+          :style="{ left: todayPct + '%' }"
+          aria-hidden="true"
+        ></div>
+        <ul class="mt-2 space-y-1.5">
+          <li v-for="b in bars" :key="b.id" class="relative h-6" data-test="timeline-bar">
+            <span
+              class="absolute top-0 h-6 rounded-full text-[11px] leading-6 px-2 truncate font-bold"
+              :class="b.status === 'ongoing' ? 'bg-lantern-500 text-night-900' : 'bg-primary-tint text-primary-strong border border-selected-border'"
+              :style="{ left: b.left + '%', width: b.width + '%', minWidth: '4rem' }"
+              :title="b.title"
+            >
+              {{ b.title }}
+            </span>
+          </li>
+        </ul>
+        <p v-if="!bars.length" class="text-[13px] text-muted py-2">올해 일정이 확정된 축제가 없어요.</p>
       </div>
-      <div
-        v-if="todayPct !== null"
-        class="absolute top-0 bottom-0 w-px bg-danger"
-        :style="{ left: todayPct + '%' }"
-        aria-hidden="true"
-      ></div>
-      <ul class="mt-2 space-y-1.5">
-        <li v-for="b in bars" :key="b.id" class="relative h-6" data-test="timeline-bar">
-          <span
-            class="absolute top-0 h-6 rounded-full text-[11px] leading-6 px-2 truncate font-bold"
-            :class="b.status === 'ongoing' ? 'bg-lantern-500 text-night-900' : 'bg-primary-tint text-primary-strong border border-selected-border'"
-            :style="{ left: b.left + '%', width: b.width + '%', minWidth: '2rem' }"
-            :title="b.title"
-          >
-            {{ b.title }}
-          </span>
-        </li>
-      </ul>
-      <p v-if="!bars.length" class="text-[13px] text-muted py-2">올해 일정이 확정된 축제가 없어요.</p>
     </div>
   </section>
 </template>
