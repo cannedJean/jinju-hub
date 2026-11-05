@@ -2,12 +2,27 @@
 import { computed } from 'vue'
 import ImagePlaceholder from '../ImagePlaceholder.vue'
 import { formatDateRange } from '../../utils/format'
+import { useMarkersStore } from '../../stores/markers'
 
 const props = defineProps({ festival: { type: Object, required: true } })
+const markersStore = useMarkersStore()
+
 const range = computed(() => formatDateRange(props.festival.start_date, props.festival.end_date) || '일정 미정')
 const CHIP = {
   ongoing: 'bg-lantern-500 text-night-900',
   upcoming: 'bg-primary-tint text-primary-strong',
+}
+
+function placeTitle(id, index) {
+  const marker = markersStore.byId?.get(id) || markersStore.items?.find?.((m) => m.id === id)
+  if (marker?.title) return marker.title
+  if (Array.isArray(props.festival.place_titles) && props.festival.place_titles[index]) {
+    return props.festival.place_titles[index]
+  }
+  if (props.festival.place_title) return props.festival.place_title
+  if (props.festival.place?.title) return props.festival.place?.title
+  if (props.festival.location) return props.festival.location
+  return props.festival.venue_place_ids?.length > 1 ? `행사 장소 ${index + 1}` : '진주시 일원'
 }
 </script>
 
@@ -48,7 +63,7 @@ const CHIP = {
           :to="`/places/${id}`"
           class="text-[13px] font-bold text-primary underline underline-offset-2"
         >
-          행사 장소 {{ festival.venue_place_ids.length > 1 ? i + 1 : '보기' }}
+          {{ placeTitle(id, i) }}
         </router-link>
       </div>
     </div>
