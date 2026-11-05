@@ -33,7 +33,7 @@ const CHIP = {
         >
           {{ festival.status_label }}
         </span>
-        <span class="text-[13px] text-muted">{{ range }}</span>
+        <span v-if="range && range !== festival.status_label" class="text-[13px] text-muted">{{ range }}</span>
       </div>
       <h3 class="text-[17px] font-extrabold text-strong">{{ festival.title }}</h3>
       <p v-if="festival.summary" class="text-[14px] text-body">{{ festival.summary }}</p>
