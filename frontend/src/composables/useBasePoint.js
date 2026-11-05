@@ -92,7 +92,7 @@ export function useBasePoint({ state, update, onBaseSet, geolocation = defaultGe
     message.value = ''
     const virtual = demoPosition(lanterns.demo)
     if (virtual) {
-      setBase({ lat: virtual.lat, lng: virtual.lng, label: '가상 내 위치' })
+      setBase({ lat: virtual.lat, lng: virtual.lng, label: '내 숙소 (가상 위치)' })
       return
     }
     if (!geolocation) {

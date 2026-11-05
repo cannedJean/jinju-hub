@@ -202,7 +202,11 @@ function renderBase() {
     }).addTo(baseLayer)
   }
   const label = b.label || '기준점'
-  L.marker([b.lat, b.lng], {
+  const isSameSpot =
+    hasCoords(props.virtualPos) &&
+    Math.abs(b.lat - props.virtualPos.lat) < 0.0001 &&
+    Math.abs(b.lng - props.virtualPos.lng) < 0.0001
+  const marker = L.marker([b.lat, b.lng], {
     icon: L.divIcon({
       className: 'jh-base-pin',
       html:
@@ -217,8 +221,10 @@ function renderBase() {
     interactive: false,
     zIndexOffset: 1500,
   })
-    .bindTooltip(labelNode(label), { permanent: true, direction: 'top', offset: [0, -16], className: 'jh-base-tooltip' })
-    .addTo(baseLayer)
+  if (!isSameSpot) {
+    marker.bindTooltip(labelNode(label), { permanent: true, direction: 'top', offset: [0, -16], className: 'jh-base-tooltip' })
+  }
+  marker.addTo(baseLayer)
 }
 
 function renderVirtual() {
@@ -374,7 +380,7 @@ onBeforeUnmount(() => {
 watch(() => props.markers, sync)
 watch(() => [props.savedIds, props.litIds], sync)
 watch(() => props.activeId, setActive)
-watch(() => [props.base, props.radius], renderBase)
+watch(() => [props.base, props.virtualPos, props.radius], renderBase)
 watch(() => props.virtualPos, renderVirtual)
 watch(() => props.fitTo, () => applyFit(true))
 watch(

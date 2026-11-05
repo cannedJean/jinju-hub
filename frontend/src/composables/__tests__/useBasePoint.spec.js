@@ -113,7 +113,7 @@ describe('useBasePoint', () => {
     lanterns.setDemo({ enabled: true, today: null, pos: { lat: 35.18, lng: 128.09 } })
     api.locate()
     expect(geo.calls).toHaveLength(0)
-    expect(lanterns.base).toMatchObject({ lat: 35.18, lng: 128.09, label: '가상 내 위치' })
+    expect(lanterns.base).toMatchObject({ lat: 35.18, lng: 128.09, label: '내 숙소 (가상 위치)' })
   })
 
   test('demo mode with no dragged pin still uses the displayed default pin (촉석루), not GPS', () => {
@@ -122,7 +122,7 @@ describe('useBasePoint', () => {
     lanterns.setDemo({ enabled: true, today: null, pos: null })
     api.locate()
     expect(geo.calls).toHaveLength(0)
-    expect(lanterns.base).toMatchObject({ lat: DEMO_START.lat, lng: DEMO_START.lng, label: '가상 내 위치' })
+    expect(lanterns.base).toMatchObject({ lat: DEMO_START.lat, lng: DEMO_START.lng, label: '내 숙소 (가상 위치)' })
   })
 
   test('a position arriving after unmount is ignored (no navigation, base untouched)', () => {
