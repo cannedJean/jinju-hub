@@ -3,6 +3,7 @@ import json
 import math
 import sqlite3
 import threading
+from dataclasses import dataclass
 from datetime import date
 from functools import wraps
 from pathlib import Path
@@ -24,6 +25,30 @@ _NEARBY_M = 1000
 _NEARBY_N = 6
 _LIKE_ANY = "(p.title LIKE ? ESCAPE '\\' OR p.addr LIKE ? ESCAPE '\\' OR p.overview LIKE ? ESCAPE '\\' OR p.menu LIKE ? ESCAPE '\\')"
 _LIKE_RANK = "CASE WHEN p.title LIKE ? ESCAPE '\\' THEN 0 WHEN p.addr LIKE ? ESCAPE '\\' THEN 1 ELSE 2 END, p.title"
+_MENU_LIKE = "p.menu LIKE ? ESCAPE '\\'"
+
+
+@dataclass(frozen=True)
+class PlaceText:
+    """One place with the text fields chat retrieval scores on (lower-cased copies precomputed)."""
+
+    id: str
+    category: str
+    title: str
+    summary: str | None
+    addr: str | None
+    lat: float | None
+    lng: float | None
+    tags: tuple[str, ...]
+    jinju8_rank: int | None
+    is_collection: bool
+    title_l: str
+    menu_l: str
+    overview_l: str
+    addr_l: str
+    has_image: bool = False
+    parking: str | None = None
+    distance_m: int | None = None
 
 
 def _loads(text, default):
@@ -79,6 +104,7 @@ class PlacesRepo:
         row = self._con.execute("SELECT value FROM meta WHERE key='fts'").fetchone()
         self.fts_mode = row[0] if row else "none"
         self.last_search_mode: str | None = None
+        self._chat_rows: list[PlaceText] | None = None
 
     def close(self) -> None:
         with self._lock:
@@ -117,10 +143,13 @@ class PlacesRepo:
         use_fts = bool(tokens) and self.fts_mode == "trigram" and all(len(t) >= 3 for t in tokens)
         self.last_search_mode = "fts" if use_fts else "like"  # introspection for tests
         if use_fts:
-            frm = "places_fts JOIN places p ON p.rowid = places_fts.rowid"
-            where.append("places_fts MATCH ?")
+            # The FTS index has no menu column: union the MATCH hits with rows whose menu has every token.
+            frm = ("places p LEFT JOIN (SELECT rowid AS rid, bm25(places_fts, 10.0, 3.0, 1.0) AS rank "
+                   "FROM places_fts WHERE places_fts MATCH ?) f ON f.rid = p.rowid")
             params.append(" ".join('"' + t.replace('"', '""') + '"' for t in tokens))
-            order = "bm25(places_fts, 10.0, 3.0, 1.0), p.title"
+            where.append("(f.rid IS NOT NULL OR (" + " AND ".join([_MENU_LIKE] * len(tokens)) + "))")
+            params += ["%" + _like_escape(t) + "%" for t in tokens]
+            order = "(f.rid IS NULL), f.rank, p.title"
         else:
             frm = "places p"
             for t in tokens:
@@ -189,16 +218,23 @@ class PlacesRepo:
                          totalPages=math.ceil(total / q.size) if total else 0)
 
     @_locked
-    def menu_texts(self, ids: list[str]) -> dict[str, str]:
-        """id -> menu text for the given places (rows without a menu are omitted)."""
-        out: dict[str, str] = {}
-        for i in range(0, len(ids), 500):
-            chunk = ids[i:i + 500]
-            for r in self._con.execute(
-                    f"SELECT id, menu FROM places WHERE menu IS NOT NULL AND id IN ({','.join('?' * len(chunk))})",
-                    chunk):
-                out[r["id"]] = r["menu"]
-        return out
+    def chat_rows(self) -> list[PlaceText]:
+        """Every place with its searchable text, loaded once (places.db is read-only)."""
+        if self._chat_rows is None:
+            self._chat_rows = [
+                PlaceText(
+                    id=r["id"], category=r["category"], title=r["title"], summary=r["summary"], addr=r["addr"],
+                    lat=r["lat"], lng=r["lng"], tags=tuple(_loads(r["tags"], [])), jinju8_rank=r["jinju8_rank"],
+                    is_collection=bool(r["is_collection"]), title_l=(r["title"] or "").lower(),
+                    menu_l=(r["menu"] or "").lower(), overview_l=(r["overview"] or "").lower(),
+                    addr_l=(r["addr"] or "").lower(), has_image=bool(r["hero_image"]),
+                    parking=r["parking"],
+                )
+                for r in self._con.execute(
+                    "SELECT id, category, title, summary, addr, lat, lng, tags, jinju8_rank, is_collection, "
+                    "menu, overview, hero_image, parking FROM places ORDER BY id")
+            ]
+        return self._chat_rows
 
     @_locked
     def markers(self, categories: list[str] | None) -> list[Marker]:

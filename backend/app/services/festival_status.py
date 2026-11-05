@@ -19,6 +19,11 @@ def kst_today() -> date:
     return datetime.now(KST).date()
 
 
+def effective_today(requested: date | None, demo_override_enabled: bool) -> date:
+    """The client's demo reference date when demo mode allows it, else today in KST."""
+    return requested if demo_override_enabled and requested is not None else kst_today()
+
+
 def festival_status(start: date | None, end: date | None, undecided: bool, today: date) -> FestivalStatus:
     if undecided or start is None:
         return "undecided"

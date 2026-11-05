@@ -22,8 +22,12 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
     anthropic_effort: str = "low"
-    anthropic_max_tokens: int = 4096
-    anthropic_timeout_seconds: float = 30.0
+    # Answers are 3-6 sentences; the call clamps this to 1024 whatever the environment says.
+    anthropic_max_tokens: int = 1024
+    # Retrieval + the 3 s weather wait + this must stay under the frontend's 30 s chat timeout.
+    anthropic_timeout_seconds: float = 20.0
+    # Process-wide Claude calls per KST day (CHAT_DAILY_LIMIT); beyond it chat answers with the fallback.
+    chat_daily_limit: int = 200
     weather_api_key: SecretStr | None = None
     weather_timeout_seconds: float = 10.0
     rate_limit: str = "10/minute"

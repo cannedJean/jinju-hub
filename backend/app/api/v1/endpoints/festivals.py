@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.schemas.festivals import FestivalList, FestivalOut
-from app.services.festival_status import STATUS_LABELS, STATUS_ORDER, festival_status, kst_today
+from app.services.festival_status import STATUS_LABELS, STATUS_ORDER, effective_today, festival_status
 from app.services.places_repo import PlacesRepo, get_places_repo
 
 router = APIRouter()
@@ -17,8 +17,7 @@ def list_festivals(
     today: date | None = Query(default=None, description="YYYY-MM-DD; honoured only in demo mode"),
     repo: PlacesRepo = Depends(get_places_repo),
 ):
-    use_override = request.app.state.settings.demo_date_override_enabled and today is not None
-    day = today if use_override else kst_today()
+    day = effective_today(today, request.app.state.settings.demo_date_override_enabled)
     items = []
     for r in repo.festival_rows():
         st = festival_status(r["start_date"], r["end_date"], r["date_undecided"], day)

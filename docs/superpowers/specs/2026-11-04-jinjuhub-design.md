@@ -479,4 +479,5 @@ KTO 방문자수 기반 "요즘 뜨는 곳", 무장애·반려동물 동반 필�
 - **증분 갱신 (§5.9)**: `areaBasedSyncList2`의 `modifiedtime`은 "이후"가 아니라 **접두 일치**다. 그래서 직전 실행 월부터 이번 달까지 `YYYYMM`으로 월마다 한 번씩 조회하고, 직전 실행일 이후 수정분만 쓴다.
 - **진주8경 (§5.8)**: 진주시 공식 목록(https://www.jinju.go.kr/02232/02244.web)을 따른다 — 제6경 **비봉산의 봄**, 제7경 **월아산 해돋이**, 제8경 **진양호 노을**(설계 초안의 비봉루·월아산 일출·진양호 일몰 대체).
 - **지도 타일 (§2, §7.4)**: OSM 표준 타일, 출처 "© OpenStreetMap contributors". CARTO 래스터 타일은 API 키를 요구해 제외했다.
+- **챗봇 장애·비용 (§6.4)**: Claude 호출 실패·시간 초과는 502가 아니라 **200 + 결정적 폴백 답변(`fallback: true`)**을 돌려준다. 프로세스 전체 하루(KST) 호출 상한 `CHAT_DAILY_LIMIT`(기본 200, 넘으면 Claude 호출 없이 폴백)과 `max_tokens` 1024 상한이 적용된다.
 - **Neon (§6.5, §8)**: 테이블은 Render 빌드 명령(`alembic upgrade head && python -m app.scripts.seed_posts`, 둘 다 멱등)이 만든다(개발 PC는 5432 차단, 무료 플랜은 셸 없음). Neon **Data API는 쓰지 않는다** — 앱은 Render에서 SQLAlchemy/psycopg로만 접속한다(Data API는 JWT·RLS가 필요하고 bcrypt·레이트리밋을 우회하게 된다).

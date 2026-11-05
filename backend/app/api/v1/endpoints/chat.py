@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.ratelimit import current_rate_limit, limiter
 from app.schemas.chatbot import ChatRequest, ChatResponse
-from app.services.chat_service import ChatUpstreamError, answer_chat
+from app.services.chat_service import answer_chat
 from app.services.database import get_db
-from app.services.festival_status import kst_today
+from app.services.festival_status import effective_today
 from app.services.places_repo import PlacesRepo, get_places_repo
 
 router = APIRouter()
@@ -24,9 +24,7 @@ async def chat(
     repo: PlacesRepo = Depends(get_places_repo),
     db: Session = Depends(get_db),
 ):
-    try:
-        return await answer_chat(body, repo, db, kst_today(), request.app.state.settings)
-    except ChatUpstreamError:
-        raise HTTPException(
-            status_code=502, detail="챗봇 답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
-        ) from None
+    settings = request.app.state.settings
+    # Claude failures come back as the flagged fallback answer (200), never as an error.
+    today = effective_today(body.today, settings.demo_date_override_enabled)
+    return await answer_chat(body, repo, db, today, settings)
