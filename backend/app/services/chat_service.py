@@ -50,10 +50,17 @@ STOP_WORDS = {
     "이번", "주말", "오늘", "내일", "게시글", "커뮤니티", "후기", "리뷰", "날씨", "기온", "알려줘",
     "알려주세요", "추천해줘", "찾아줘", "보여줘", "있어", "있나요", "좀", "비", "오는", "날", "에서", "에서의",
     "저녁", "점심", "아침", "먹을", "만한", "반나절", "둘러볼", "동안", "하루", "코스",
+    "먹고", "싶어", "어디야", "가까운", "볼만한", "근처에", "주변에", "인근", "옆",
 }
+# A term directly followed by one of these words is a location (landmark/area), not the thing searched for.
+_LOCATION_MARKERS = ("근처", "주변", "부근", "옆", "가까운", "인근")
+_LOCATION_SUFFIXES = ("동", "면", "읍", "로", "길")
+_NOODLE_ENDINGS = ("냉면", "라면", "짜장면", "비빔면", "짬뽕면")  # 면 here is a dish, not an administrative 면
+_ANCHOR_RADIUS_M = 3000
+_TARGET_LIMIT = 50  # PlaceQuery.size max
 # Trailing particles stripped from a token when the remaining stem keeps at least 2 chars (longest first).
 _PARTICLES = ("에서", "으로", "로", "에", "의", "을", "를", "이", "가", "은", "는", "도")
-_MERGE_LIMIT = 50  # per-term hit list size used to judge specificity (PlaceQuery.size max)
+
 INDOOR_WORDS = ("실내", "비가", "비 오", "비오", "우천")
 WEATHER_WORDS = ("날씨", "기온", "실내", "실외", "야외", "비가", "비 오", "비오", "우산", "더워", "추워")
 POST_WORDS = ("게시글", "커뮤니티", "후기", "리뷰")
@@ -119,22 +126,118 @@ def _detect_categories(message: str) -> list[str]:
     return list(dict.fromkeys(code for kw, code in TYPE_KEYWORDS.items() if kw in message))
 
 
+def _normalize_token(tok: str) -> str | None:
+    """Lower-cased token -> search term (particles and 집 stripped), or None when it is not searchable."""
+    if tok not in STOP_WORDS:
+        for suffix in _PARTICLES:
+            if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
+                tok = tok[: -len(suffix)]
+                break
+    if len(tok) > 2 and tok.endswith("집"):  # 냉면집 -> 냉면 (after the particle: 냉면집에서 -> 냉면)
+        tok = tok[:-1]
+    if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
+        return None
+    if tok.startswith(("알려", "추천", "찾아", "보여")):
+        return None
+    return tok
+
+
+def _analyze_terms(message: str) -> list[tuple[str, bool]]:
+    """Search terms in message order, each flagged True when directly followed by a location marker."""
+    toks = re.findall(r"[가-힣A-Za-z0-9]+", message.lower())
+    found: dict[str, bool] = {}
+    for idx, tok in enumerate(toks):
+        term = _normalize_token(tok)
+        if term is None:
+            continue
+        nxt = toks[idx + 1] if idx + 1 < len(toks) else ""
+        found[term] = found.get(term, False) or nxt.startswith(_LOCATION_MARKERS)
+    return list(found.items())
+
+
 def _search_terms(message: str) -> list[str]:
-    terms: list[str] = []
-    for tok in re.findall(r"[가-힣A-Za-z0-9]+", message.lower()):
-        if len(tok) > 2 and tok.endswith("집"):  # 냉면집 -> 냉면
-            tok = tok[:-1]
-        if tok not in STOP_WORDS:
-            for suffix in _PARTICLES:
-                if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
-                    tok = tok[: -len(suffix)]
-                    break
-        if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
+    return [t for t, _ in _analyze_terms(message)]
+
+
+def _has_location_shape(term: str) -> bool:
+    return (len(term) >= 3 and term.endswith(_LOCATION_SUFFIXES)
+            and not (term.endswith("면") and term.endswith(_NOODLE_ENDINGS)))
+
+
+def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> tuple[float, float] | None:
+    """Coordinates of the sight/culture place named `term` (jinju8 first, then shortest title).
+
+    strict (term not marked as a location): only a jinju8 place or an exact title counts, so that a type word
+    such as 카페 never resolves to a sight that merely has it in its name."""
+    hits = repo.search(PlaceQuery(q=term, category=["sight", "culture"], size=_TARGET_LIMIT)).items
+    named = [p for p in hits if term in p.title.lower() and p.lat is not None and p.lng is not None
+             and (not strict or p.jinju8_rank is not None or p.title.lower() == term)]
+    if not named:
+        return None
+    best = min(named, key=lambda p: (p.jinju8_rank is None, p.jinju8_rank or 0, len(p.title), p.id))
+    return best.lat, best.lng  # type: ignore[return-value]
+
+
+def _search_places(
+    repo: PlacesRepo, categories: list[str], terms: list[tuple[str, bool]], tags: list[str]
+) -> list:
+    """Places for the question: TARGET terms (the dish/type) filter, a LOCATION term anchors the distance sort."""
+
+    def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES, **kw):
+        return repo.search(
+            PlaceQuery(q=q, category=categories, tags=tags, sort=sort, size=size, **kw)  # type: ignore[arg-type]
+        ).items
+
+    anchor: tuple[float, float] | None = None
+    locations: list[str] = []
+    targets: list[str] = []
+    for term, marked in terms:  # explicit locations first, so an unmarked word cannot steal the anchor
+        if marked or _has_location_shape(term):
+            locations.append(term)
+            anchor = anchor or _resolve_landmark(repo, term)
+    for term, marked in terms:
+        if term in locations:
             continue
-        if tok.startswith(("알려", "추천", "찾아", "보여")):
-            continue
-        terms.append(tok)
-    return list(dict.fromkeys(terms))
+        landmark = None if anchor else _resolve_landmark(repo, term, strict=True)
+        if landmark:
+            locations.append(term)
+            anchor = landmark
+        else:
+            targets.append(term)
+
+    if targets:
+        sort = "distance" if anchor else "relevance"
+        lists = [run(t, sort, _TARGET_LIMIT, near=anchor) for t in targets]
+        matched: dict[str, int] = {}
+        first: dict[str, tuple[int, int]] = {}
+        place: dict[str, object] = {}
+        for li, hits in enumerate(lists):
+            for pos, p in enumerate(hits):
+                matched[p.id] = matched.get(p.id, 0) + 1
+                first.setdefault(p.id, (li, pos))
+                place.setdefault(p.id, p)
+
+        def key(pid: str):
+            p = place[pid]
+            if anchor:  # nearest first; places without coordinates last
+                dist = p.distance_m if p.distance_m is not None else float("inf")
+                return (-matched[pid], dist, first[pid])
+            in_area = any(loc in (p.addr or "").lower() for loc in locations)
+            return (-matched[pid], not in_area, first[pid])
+
+        if place:
+            return [place[i] for i in sorted(place, key=key)[:MAX_PLACES]]
+
+    if anchor:
+        found = run(None, "distance", MAX_PLACES, near=anchor, radius=_ANCHOR_RADIUS_M)
+        if found:
+            return found
+    elif terms:
+        found = run(" ".join(t for t, _ in terms))
+        if found:
+            return found
+    # No search terms, or none matched: always hand the model some representative places.
+    return run(None, "collection") or (_search_places(repo, [], [], []) if categories or tags else [])
 
 
 def _place_line(
@@ -154,48 +257,10 @@ def _place_line(
     return line, brief
 
 
-def _merge_hits(hit_lists: list[list], terms: list[str] | None = None) -> list:
-    """Merge per-term hit lists: most terms matched first, then fewest address-only matches (a place name
-    like 진주성 also occurs in street names), then the rarest matched term, then original rank."""
-    matched: dict[str, int] = {}
-    weak: dict[str, int] = {}
-    rarest: dict[str, int] = {}
-    first: dict[str, tuple[int, int]] = {}
-    place: dict[str, object] = {}
-    for li, hits in enumerate(hit_lists):
-        term = terms[li].lower() if terms else None
-        for pos, p in enumerate(hits):
-            matched[p.id] = matched.get(p.id, 0) + 1
-            rarest[p.id] = min(rarest.get(p.id, len(hits)), len(hits))
-            first.setdefault(p.id, (li, pos))
-            place.setdefault(p.id, p)
-            if term and term in (getattr(p, "addr", None) or "").lower() and term not in (p.title or "").lower():
-                weak[p.id] = weak.get(p.id, 0) + 1
-    order = sorted(place, key=lambda i: (-matched[i], weak.get(i, 0), rarest[i], first[i]))
-    return [place[i] for i in order[:MAX_PLACES]]
-
-
-def _search_places(repo: PlacesRepo, categories: list[str], terms: list[str], tags: list[str]) -> list:
-    def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES):
-        return repo.search(
-            PlaceQuery(q=q, category=categories, tags=tags, sort=sort, size=size)  # type: ignore[arg-type]
-        ).items
-
-    if terms:
-        found = run(" ".join(terms))
-        if len(found) < MAX_PLACES and len(terms) > 1:  # AND was too strict: top up with per-term hits
-            seen = {p.id for p in found}
-            extra = _merge_hits([run(t, size=_MERGE_LIMIT) for t in terms], terms)
-            found = found + [p for p in extra if p.id not in seen][: MAX_PLACES - len(found)]
-        if found:
-            return found
-    # No search terms, or none matched: always hand the model some representative places.
-    return run(None, "collection") or (_search_places(repo, [], [], []) if categories or tags else [])
-
-
 def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retrieval:
     cats = _detect_categories(message)
-    terms = _search_terms(message)
+    analyzed = _analyze_terms(message)
+    terms = [t for t, _ in analyzed]
     tags = ["indoor"] if any(w in message for w in INDOOR_WORDS) else []
     want_festival = "festival" in cats
     search_cats = [c for c in cats if c != "festival"]
@@ -203,7 +268,7 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
 
     fest_rows = {r["id"]: r for r in repo.festival_rows()}
     if not (want_festival and not (search_cats or terms or tags)):
-        for p in _search_places(repo, search_cats, terms, tags):
+        for p in _search_places(repo, search_cats, analyzed, tags):
             line, brief = _place_line(p.id, p.title, p.category, p.addr, p.summary, fest_rows.get(p.id), today)
             out.items.append(_Item("place", "place", p.id, p.title, line, brief))
 

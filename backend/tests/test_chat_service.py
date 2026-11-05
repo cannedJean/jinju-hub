@@ -14,7 +14,7 @@ from app.schemas.chatbot import ChatRequest
 from app.services import chat_service
 from app.services.chat_service import answer_chat, build_context
 from app.services.database import build_engine
-from app.services.places_repo import PlacesRepo
+from app.services.places_repo import PlacesRepo, _haversine_m
 FIXTURE_DB = Path(__file__).parent / "fixtures" / "places_fixture.db"
 
 TODAY = date(2026, 11, 4)
@@ -347,23 +347,88 @@ def test_search_terms_strip_particles_and_fillers():
     assert chat_service._search_terms("진주성 근처에서 저녁으로 먹을 만한 냉면집 추천해줘") == ["진주성", "냉면"]
 
 
-def test_merge_ranks_by_terms_matched_then_specificity():
-    def p(i):
-        return SimpleNamespace(id=f"p{i}")
-
-    common = [p(i) for i in range(1, 9)] + [p(20)]  # term A: many hits, also contains p20
-    rare = [p(30), p(20)]  # term B: few hits, p20 matches both
-    merged = chat_service._merge_hits([common, rare])
-    ids = [x.id for x in merged]
-    assert ids[0] == "p20"  # matches both terms
-    assert ids[1] == "p30"  # rarer term before the common one
-    assert ids[2:] == ["p1", "p2", "p3", "p4"]
-    assert len(ids) == chat_service.MAX_PLACES
-    assert ids == [x.id for x in chat_service._merge_hits([common, rare])]  # deterministic
-
-
 def test_food_query_returns_naengmyeon_place(repo, db):
     ret = chat_service._retrieve("진주성 근처에서 저녁으로 먹을 만한 냉면집 추천해줘", repo, db, TODAY)
     ids = [i.id for i in ret.items if i.group == "place"]
     assert HAYEON in ids
     assert "냉면" in ret.items[0].title or ret.items[0].id == HAYEON
+
+
+def test_search_terms_particle_before_jip_suffix():
+    assert chat_service._search_terms("냉면집에서 먹고 싶어") == ["냉면"]
+    assert chat_service._search_terms("촉석루에서 가까운 카페") == ["촉석루", "카페"]
+
+
+# --- synthetic DB shaped like the real one: landmark sight, same-name food row, look-alike rows ---
+_COLS = ("id", "category", "title", "overview", "addr", "lat", "lng", "menu", "jinju8_rank")
+_LM_LAT, _LM_LNG = 35.1895, 128.0800  # 진주성 sight row
+_CH_LAT, _CH_LNG = 35.1895, 128.0819  # 촉석루 sight row
+
+
+def _rows():
+    rows = [
+        ("s-castle", "sight", "진주성", "성곽", "진주시 남강로 626", _LM_LAT, _LM_LNG, None, 2),
+        ("s-chok", "sight", "촉석루", "누각", "진주시 남강로 626", _CH_LAT, _CH_LNG, None, 1),
+        ("f-castle", "food", "진주성", "진주성 이름의 식당", "진주시 먼동 1", 35.30, 128.20, "백반", None),
+        ("f-chok", "food", "촉석루", "촉석루 이름의 식당", "진주시 먼동 2", 35.30, 128.21, "백반", None),
+    ]
+    for k in range(3):  # near the landmark, mention it, do not serve the dish
+        rows.append((f"f-chick{k}", "food", f"치킨{k}", "진주성 바로 앞 치킨집", f"진주성로 {k}",
+                     _LM_LAT + 0.0002 * (k + 1), _LM_LNG, "치킨", None))
+    # (title, offset in 0.001 deg lat): famous 하연옥 is 4th nearest but sorts last alphabetically
+    for title, off in [("가냉면", 30), ("나냉면", 2), ("다냉면", 1), ("라냉면", 25), ("마냉면", 3),
+                       ("바냉면", 40), ("하연옥", 2.5), ("사냉면", 20)]:
+        rows.append((f"f-{title}", "food", title, "물냉면과 비빔냉면", "진주시 어딘가", _LM_LAT + 0.001 * off,
+                     _LM_LNG, "물냉면", None))
+    for k in range(3):
+        rows.append((f"c-cafe{k}", "food", f"커피{k} 카페", "분위기 좋은 카페", "진주시 남강로",
+                     _CH_LAT + 0.001 * (k + 1), _CH_LNG, "커피", None))
+    for k in range(3):
+        rows.append((f"f-noise{k}", "food", f"분식{k}", "촉석루 바로 옆 분식집", "진주시 남강로",
+                     _CH_LAT + 0.0003 * (k + 1), _CH_LNG, "떡볶이", None))
+    return rows
+
+
+@pytest.fixture
+def real_like_repo(tmp_path):
+    import shutil
+    import sqlite3
+
+    path = tmp_path / "places.db"
+    shutil.copy(FIXTURE_DB, path)
+    con = sqlite3.connect(path)
+    con.execute("DELETE FROM places")
+    con.executemany(
+        f"INSERT INTO places ({','.join(_COLS)}, title_norm) VALUES ({','.join('?' * len(_COLS))}, '')",
+        _rows(),
+    )
+    con.execute("INSERT INTO places_fts(places_fts) VALUES('rebuild')")
+    con.commit()
+    con.close()
+    r = PlacesRepo(path)
+    yield r
+    r.close()
+
+
+def _titles(repo, message):
+    cats = [c for c in chat_service._detect_categories(message) if c != "festival"]
+    found = chat_service._search_places(repo, cats, chat_service._analyze_terms(message), [])
+    return [(p.id, p.title) for p in found], found
+
+
+def test_dish_near_landmark_sorted_by_distance(real_like_repo):
+    pairs, found = _titles(real_like_repo, "진주성 근처에서 저녁으로 먹을 만한 냉면집 추천해줘")
+    titles = [t for _, t in pairs]
+    assert len(titles) == chat_service.MAX_PLACES
+    assert all("냉면" in t or t == "하연옥" for t in titles)
+    assert titles == ["다냉면", "나냉면", "하연옥", "마냉면", "사냉면", "라냉면"]
+    assert "하연옥" in titles
+    dists = [_haversine_m(_LM_LAT, _LM_LNG, p.lat, p.lng) for p in found]
+    assert dists == sorted(dists)
+
+
+def test_cafe_near_landmark_only_cafes(real_like_repo):
+    pairs, _ = _titles(real_like_repo, "촉석루 근처 카페")
+    assert [t for _, t in pairs] == ["커피0 카페", "커피1 카페", "커피2 카페"]
+    pairs, _ = _titles(real_like_repo, "촉석루에서 가까운 카페")
+    assert len(pairs) == 3 and all("카페" in t for _, t in pairs)
