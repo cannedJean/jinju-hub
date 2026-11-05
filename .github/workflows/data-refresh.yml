@@ -1,0 +1,64 @@
+name: data-refresh
+# NOTE: `schedule` triggers only run on the repository's DEFAULT branch. While deploys come from
+# feat/jinjuhub-mvp, use workflow_dispatch (select the branch). The bot pushes back to the branch
+# the run was started on (github.ref_name).
+on:
+  schedule:
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - run: pip install -r pipeline/requirements.txt
+
+      - name: Read committed content_hash
+        run: |
+          OLD_HASH=$(python -c "import json,sys; print(json.load(open('backend/app/data/report.json')).get('content_hash',''))" 2>/dev/null || true)
+          echo "OLD_HASH=${OLD_HASH}" >> "$GITHUB_ENV"
+
+      - name: Run incremental pipeline
+        working-directory: pipeline
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: python -m jinju_pipeline run --incremental
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-data
+          path: |
+            pipeline/data/raw
+            pipeline/data/work
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Commit changed data
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          NEW_HASH=$(python -c "import json; print(json.load(open('backend/app/data/report.json'))['content_hash'])")
+          if [ "$NEW_HASH" = "$OLD_HASH" ]; then
+            echo "content_hash unchanged; nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/data/places.db backend/app/data/report.json
+          git commit -m "data: weekly refresh ${{ github.run_id }}"
+          git pull --rebase origin "$REF_NAME"
+          git push origin "HEAD:$REF_NAME"
