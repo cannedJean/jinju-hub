@@ -121,7 +121,7 @@ NIGHT_WORDS = ("밤", "밤에", "야간", "야경")
 FOOD_WORDS = ("점심", "저녁", "아침", "밥", "식사", "먹을", "먹고")
 KID_WORDS = ("아이", "아이들", "애들", "어린이", "아기", "키즈")
 _LOOSE_PREFIX = {"먹을", "먹고", "식사", "야간", "야경", "어린이", "아이들", "키즈"}
-NIGHT_HINTS = ("야경",)  # scored with its synonyms (야간, 조명) and the night_view tag
+NIGHT_HINTS = ("야경",)  # scored like a target (the user asked for it) with 야간/조명 and the night_view tag
 KID_HINTS = ("어린이", "체험", "박물관", "공원", "놀이")
 # Head nouns naming a kind of place: a compound that names nothing (전통시장, 도심공원) backs off to its head.
 _HEAD_NOUNS = ("시장", "공원", "박물관", "미술관", "카페", "식당", "호텔", "모텔", "서원", "사찰")
@@ -517,7 +517,7 @@ def _rank_places(
     focus = [t.text for t in targets if (_is_dish_word(t.text) or t.shop) and t.text in target_terms]
     # With an anchor, distance handles proximity: the location words' text hits do not score.
     location_terms = [] if anchor is not None else [t.text for t in locations if t.text not in _HOME_WORDS]
-    weighted = ([(t, 1.0) for t in target_terms] + [(h, _W_HINT) for h in hints]
+    weighted = ([(t, 1.0) for t in target_terms] + [(h, 1.0 if h in NIGHT_HINTS else _W_HINT) for h in hints]
                 + [(t, 1.0) for t in location_terms])
     for term, _ in weighted:
         hits_for(term)
