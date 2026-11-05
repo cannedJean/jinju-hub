@@ -27,7 +27,7 @@ onMounted(load)
 
 // User-facing source summary (static copy; counts come from the report only).
 const SOURCES = [
-  { key: 'jinju_city.tourinfo', provider: '진주시', use: '명소·관광지 기본 정보' },
+  { key: 'jinju_city.tourinfo', provider: '진주시', use: '명소 기본 정보' },
   { key: 'jinju_city.restaurant', provider: '진주시', use: '맛집 정보' },
   { key: 'jinju_city.festival', provider: '진주시', use: '축제·행사 일정' },
   { key: 'jinju_city.heritage', provider: '진주시', use: '문화·역사 장소' },
@@ -35,8 +35,8 @@ const SOURCES = [
   { key: 'tourapi.area', provider: '한국관광공사', use: '장소 상세·이미지·좌표 보강' },
   { key: 'tourapi.festival', provider: '한국관광공사', use: '축제·행사 보강' },
 ].map((s) => ({ ...s, name: sourceLabel(s.key) }))
-// Pipeline SourceResult.status values: ok | failed | reused_previous.
-const STATUS_LABEL = { ok: '정상', failed: '실패', reused_previous: '이전 데이터 재사용' }
+// Pipeline SourceResult.status values: ok | failed | reused_previous | skipped.
+const STATUS_LABEL = { ok: '정상', failed: '실패', reused_previous: '이전 데이터 재사용', skipped: '건너뜀' }
 
 const sourceRows = computed(() => {
   const byKey = Object.fromEntries((report.value?.sources || []).map((s) => [s.source, s]))
@@ -145,7 +145,10 @@ function fmtTime(iso) {
                   <td class="px-3 py-2">{{ row.use }}</td>
                   <td class="px-3 py-2 text-right">{{ row.r ? Number(row.r.records).toLocaleString('ko-KR') : '-' }}</td>
                   <td class="px-3 py-2">
-                    <span v-if="row.r" :class="row.r.status === 'ok' ? 'text-strong' : 'text-danger font-bold'">
+                    <span
+                      v-if="row.r"
+                      :class="row.r.status === 'ok' || row.r.status === 'reused_previous' ? 'text-strong' : (row.r.status === 'skipped' ? 'text-muted' : 'text-danger font-bold')"
+                    >
                       {{ STATUS_LABEL[row.r.status] || row.r.status }}
                     </span>
                     <span v-else class="text-muted">기록 없음</span>
