@@ -67,29 +67,31 @@ describe('CheckInButton', () => {
     expect(useLanternsStore().isLit('p1')).toBe(false)
   })
 
-  test('demo mode without virtual pin lights without geolocation', async () => {
+  test('demo arrival from far away moves the virtual pin to the place and lights it (no GPS)', async () => {
     const spy = mockGeo(ok(0, 0, 1))
     const lanterns = useLanternsStore()
     lanterns.setDemo({ enabled: true })
-    const w = mount(CheckInButton, { props: { place } })
+    const far = { id: 'p-far', title: '먼 곳', category: 'sight', lat: 35.25, lng: 128.2 }
+    const w = mount(CheckInButton, { props: { place: far } })
     expect(w.text()).toContain('도착 시뮬레이션')
     expect(w.text()).toContain('시연 모드')
     await click(w)
     expect(spy).not.toHaveBeenCalled()
-    expect(lanterns.isLit('p1')).toBe(true)
-    expect(lanterns.items.p1.litMethod).toBe('demo')
+    expect(lanterns.isLit('p-far')).toBe(true)
+    expect(lanterns.items['p-far'].litMethod).toBe('demo')
+    expect(lanterns.demo.pos).toEqual({ lat: 35.25, lng: 128.2 })
+    expect(lanterns.demo.enabled).toBe(true)
+    w.unmount()
   })
 
-  test('demo mode with virtual pin 2km away is too far', async () => {
-    const spy = mockGeo(ok(0, 0, 1))
+  test('demo arrival at a place without coordinates keeps the no-location message', async () => {
     const lanterns = useLanternsStore()
-    // ~2.0km north of the place
-    lanterns.setDemo({ enabled: true, pos: { lat: 35.19 + 2000 / 111195, lng: 128.08 } })
-    const w = mount(CheckInButton, { props: { place } })
+    lanterns.setDemo({ enabled: true })
+    const w = mount(CheckInButton, { props: { place: { id: 'p-nc', title: 'x', lat: null, lng: null } } })
     await click(w)
-    expect(spy).not.toHaveBeenCalled()
-    expect(w.text()).toContain('아직 2.0km 떨어져 있어요')
-    expect(lanterns.isLit('p1')).toBe(false)
+    expect(w.text()).toContain('위치 정보가 없어')
+    expect(lanterns.isLit('p-nc')).toBe(false)
+    w.unmount()
   })
 
   test('already lit shows lit state', () => {

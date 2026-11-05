@@ -1,5 +1,15 @@
 const R = 6371008.8
 
+// Default demo-mode virtual position (촉석루): the pin shown on the map until the presenter drags it.
+export const DEMO_START = { lat: 35.1897, lng: 128.0819 }
+
+// The effective demo position: the dragged pin when set, otherwise DEMO_START (null outside demo mode).
+export function demoPosition(demo) {
+  if (!demo?.enabled) return null
+  const p = demo.pos
+  return p && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? p : DEMO_START
+}
+
 const rad = (d) => (d * Math.PI) / 180
 
 export function haversineMeters(a, b) {

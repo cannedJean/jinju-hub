@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { decodeShare, encodeShare } from '../share'
+import { SHARE_MAX_IDS, capShareIds, decodeShare, encodeShare } from '../share'
 
 describe('share', () => {
   test('roundtrip and junk', () => {
@@ -20,6 +20,14 @@ describe('share', () => {
   test('caps at 100', () => {
     const ids = Array.from({ length: 150 }, (_, i) => `jh-${i}`)
     expect(decodeShare(encodeShare(ids))).toHaveLength(100)
+  })
+  test('encoder caps at the decoder limit and never produces a link the decoder rejects', () => {
+    const ids = Array.from({ length: 300 }, (_, i) => `jh-${String(i).padStart(10, '0')}`)
+    const s = encodeShare(ids)
+    expect(s.length).toBeLessThanOrEqual(4096)
+    expect(decodeShare(s)).toEqual(ids.slice(0, SHARE_MAX_IDS))
+    expect(capShareIds(ids)).toHaveLength(100)
+    expect(capShareIds(['jh-1'])).toEqual(['jh-1'])
   })
   test('empty / non-string input', () => {
     expect(decodeShare('')).toEqual([])

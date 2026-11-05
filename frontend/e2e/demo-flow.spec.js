@@ -2,15 +2,13 @@ import { test, expect, isMobile, navigate, openDemoSettings, openSheet, screensh
 
 // 진주성 in the fixture places db (tests/fixtures/places_fixture.db).
 const JINJUSEONG = { id: 'jh-14496674c7', latitude: 35.18952066914974, longitude: 128.07996337934236 }
-// Lodging for the demo script: next to 하연옥 하대점 (fixture food place at 35.19477, 128.11617).
-const LODGING = { latitude: 35.1946, longitude: 128.1158, accuracy: 20 }
 
 test('demo script: explore -> lodging radius -> save -> demo check-in -> badge -> festival date', async ({
   page,
   context,
 }, testInfo) => {
   const mobile = isMobile(testInfo)
-  await context.setGeolocation(LODGING)
+  // No geolocation and no seeded state: demo mode's virtual pin (default 촉석루) is the user's position.
 
   // 1. Demo mode from the shared link.
   await page.goto('/?demo=1')
@@ -44,27 +42,35 @@ test('demo script: explore -> lodging radius -> save -> demo check-in -> badge -
   await expect(page).toHaveURL(/bbox=/)
   await expect(page.getByText(/지도 영역 안 \d+곳/).first()).toBeAttached()
 
-  // 5. 내 숙소: current location (GPS near 하연옥), radius 1km, nearest first.
+  // 5. 내 숙소: current location (demo mode: the virtual pin), radius 5km, nearest first.
   if (mobile) await openSheet(page)
   await page.getByRole('button', { name: '현재 위치' }).click()
-  const radius1k = page.getByRole('group', { name: '숙소 반경' }).getByRole('button', { name: '1km', exact: true })
-  await expect(radius1k).toBeVisible()
-  // Setting the lodging already applies the default 1km; clicking an active radius would turn it off.
-  if ((await radius1k.getAttribute('aria-pressed')) !== 'true') await radius1k.click()
-  await expect(radius1k).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByText(/숙소 1km 안 \d+곳/).first()).toBeAttached()
+  // The default 1km may hold no food place around 촉석루 in the fixture db: widen to 5km (as a presenter would).
+  const radiusGroup = page.getByRole('group', { name: '숙소 반경' })
+  const radius5k = radiusGroup.getByRole('button', { name: '5km', exact: true })
+  await expect(radius5k).toBeVisible()
+  await radius5k.click()
+  await expect(radius5k).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText(/숙소 5km 안 \d+곳/).first()).toBeAttached()
 
   // 6. First card shows its distance from the lodging.
   const firstCard = page.locator('article[data-place-id]').first()
-  await expect(firstCard).toContainText('하연옥')
   await expect(firstCard).toContainText(/\d(\.\d)?(m|km)/)
 
   // 7. Detail -> 담기 -> 도착 시뮬레이션.
-  await firstCard.getByRole('link', { name: /하연옥/ }).click()
-  await expect(page.getByRole('heading', { level: 1, name: /하연옥/ })).toBeVisible()
+  const link = firstCard.getByRole('link').first()
+  const title = (await link.innerText()).trim()
+  await link.click()
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
   await page.getByRole('button', { name: '◇ 유등 띄우기(담기)' }).click()
   await expect(page.getByRole('button', { name: '◇ 담음 · 빼기' })).toBeVisible()
   await page.getByRole('button', { name: '도착 시뮬레이션' }).click()
+  // The virtual pin moved to the place (no distance check in demo mode).
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('jinjuhub.lanterns.v1')).demo.pos))
+    .toMatchObject({ lat: expect.any(Number), lng: expect.any(Number) })
+  const pos = await page.evaluate(() => JSON.parse(localStorage.getItem('jinjuhub.lanterns.v1')).demo.pos)
+  expect(Math.abs(pos.lat - 35.1897) + Math.abs(pos.lng - 128.0819)).toBeGreaterThan(0.0005)
 
   // 8. First-light toast (announced + shown), lit state, header progress.
   await expect(page.getByRole('status').filter({ hasText: '첫 유등을 밝혔어요!' })).toBeAttached()

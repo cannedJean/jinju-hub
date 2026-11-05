@@ -6,7 +6,7 @@ import { useLanternsStore } from './lanterns'
 let inflight = null
 
 export const useCollectionStore = defineStore('collection', {
-  state: () => ({ data: null, loaded: false, newlyEarned: [] }),
+  state: () => ({ data: null, loaded: false, error: false, newlyEarned: [] }),
   getters: {
     collectionIds: (s) => s.data?.collection_ids || [],
     badges: (s) => s.data?.badges || [],
@@ -27,6 +27,11 @@ export const useCollectionStore = defineStore('collection', {
           .then((d) => {
             this.data = d
             this.loaded = true
+            this.error = false
+          })
+          .catch((e) => {
+            this.error = true
+            throw e
           })
           .finally(() => {
             inflight = null

@@ -1,4 +1,5 @@
 <script setup>
+import { sourceLabel } from '../../utils/constants'
 import { computed, ref, watch } from 'vue'
 import ImagePlaceholder from '../ImagePlaceholder.vue'
 
@@ -29,7 +30,7 @@ const current = computed(() => usable.value[Math.min(index.value, usable.value.l
 
 function caption(im) {
   const license = LICENSE_LABELS[im.license] ?? (im.license || '라이선스 정보 없음')
-  return `출처: ${im.source || '알 수 없음'} · ${license}`
+  return `출처: ${sourceLabel(im.source) || '알 수 없음'} · ${license}`
 }
 
 function onError(url) {

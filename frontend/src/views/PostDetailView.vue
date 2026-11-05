@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StateView from '../components/StateView.vue'
 import { fetchPost, deletePost } from '../api/posts'
@@ -26,14 +26,20 @@ const pwdInput = ref(null)
 const dialogRef = ref(null)
 let previouslyFocused = null
 
+let loadSeq = 0
 async function loadData() {
+  const seq = ++loadSeq
+  const id = route.params.id
   loading.value = true
   error.value = false
   errorMessage.value = ''
   notFound.value = false
   try {
-    post.value = await fetchPost(route.params.id)
+    const data = await fetchPost(id)
+    if (seq !== loadSeq) return
+    post.value = data
   } catch (e) {
+    if (seq !== loadSeq) return
     post.value = null
     if (getApiStatus(e) === 404) {
       notFound.value = true
@@ -43,7 +49,7 @@ async function loadData() {
         getApiStatus(e) === 429 ? RATE_LIMIT_MESSAGE : getApiDetail(e, '게시글을 불러올 수 없습니다.')
     }
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -130,7 +136,14 @@ async function confirmAction() {
   }
 }
 
-onMounted(loadData)
+// Reload when the same route record is reused for another post (e.g. a chat source link).
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id !== undefined && route.name === 'post') loadData()
+  },
+  { immediate: true },
+)
 onUnmounted(() => {
   document.body.style.overflow = ''
 })

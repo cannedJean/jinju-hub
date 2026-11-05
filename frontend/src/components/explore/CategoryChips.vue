@@ -61,7 +61,13 @@ const indoorOn = () => props.tags.includes('indoor')
     >
       <span class="chip__dot" :style="{ background: `var(--cat-${code})` }" aria-hidden="true"></span>
       {{ categoryLabel(code) }}
-      <span v-if="counts[code]" class="chip__count">{{ counts[code] }}</span>
+      <span
+        v-if="counts[code]"
+        class="chip__count"
+        :title="`지도에 표시되는 장소 ${counts[code]}곳 (위치 정보가 있는 장소만 집계)`"
+        :aria-label="`지도 표시 ${counts[code]}곳`"
+        >지도 {{ counts[code] }}</span
+      >
     </button>
 
     <span class="chip-divider" aria-hidden="true"></span>

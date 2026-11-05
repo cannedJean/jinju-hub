@@ -70,3 +70,48 @@ describe('HomeView banner', () => {
     expect(w.text()).toContain('유등제 (10.1 ~ 10.10)')
   })
 })
+
+describe('HomeView cold-start failure', () => {
+  test('while the first request is pending a neutral loading banner shows, not the fallback', async () => {
+    let resolve
+    fetchFestivals.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    const w = mount(HomeView, { global: { plugins: plugins() } })
+    await flushPromises()
+    expect(w.find('[data-test="festival-loading"]').text()).toContain('축제 정보를 불러오는 중')
+    expect(w.text()).not.toContain('유등축제는 매년 10월')
+    resolve({ items: [], today: '2026-11-04' })
+    await flushPromises()
+    expect(w.find('[data-test="festival-loading"]').exists()).toBe(false)
+    expect(w.text()).toContain('유등축제는 매년 10월')
+  })
+
+  test('shows an explicit retry state instead of the fallback banner, and retries', async () => {
+    fetchFestivals.mockRejectedValueOnce(new Error('timeout'))
+    const w = mount(HomeView, { global: { plugins: plugins() } })
+    await flushPromises()
+    expect(w.find('[data-test="festival-error"]').exists()).toBe(true)
+    expect(w.text()).not.toContain('유등축제는 매년 10월')
+    fetchFestivals.mockResolvedValueOnce({
+      items: [{ id: 'a', title: '유등제', status: 'ongoing', start_date: '', end_date: '' }],
+      today: '2026-10-05',
+    })
+    await w.find('[data-test="festival-error"] button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="festival-error"]').exists()).toBe(false)
+    expect(w.text()).toContain('지금 진행 중: 유등제')
+  })
+
+  test('failed collection load shows – instead of 0 and offers retry', async () => {
+    fetchFestivals.mockResolvedValue({ items: [], today: '2026-11-04' })
+    const { fetchCollection } = await import('../../api/places')
+    fetchCollection.mockRejectedValueOnce(new Error('timeout'))
+    const w = mount(HomeView, { global: { plugins: plugins() } })
+    await flushPromises()
+    expect(w.find('[data-test="progress-card"]').text()).toContain('–')
+    expect(w.find('[data-test="progress-card"]').text()).not.toContain('◆ 0/')
+    fetchCollection.mockResolvedValueOnce({ collection_ids: ['a', 'b'], badges: [] })
+    await w.find('[data-test="progress-error"] button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="progress-card"]').text()).toContain('◆ 0/2')
+  })
+})

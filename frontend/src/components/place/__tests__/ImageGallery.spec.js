@@ -28,6 +28,14 @@ describe('ImageGallery', () => {
     expect(w.text()).toContain('진주시 제공')
   })
 
+  test('internal source keys are shown as Korean labels', () => {
+    const w = mount(ImageGallery, {
+      props: { images: [{ url: 'a', license: 'Type1', source: 'jinju_city.tourinfo' }] },
+    })
+    expect(w.text()).toContain('진주시 관광정보')
+    expect(w.text()).not.toContain('jinju_city.tourinfo')
+  })
+
   test('placeholder when no images', () => {
     const w = mount(ImageGallery, { props: { images: [] } })
     expect(w.find('img').exists()).toBe(false)

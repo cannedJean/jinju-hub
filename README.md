@@ -56,7 +56,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
 cd pipeline && python -m pytest        # 파이프라인
 cd backend  && python -m pytest        # 백엔드
 cd frontend && npm test                # vitest
-cd frontend && npx playwright test     # e2e (BASE_URL 지정 시 배포본 대상)
+cd frontend && npx playwright test     # e2e (픽스처, 로컬 전용: 외부 요청은 차단됨). 배포본 확인은 LIVE_URL=... npm run e2e:live
 ```
 
 ## 문서

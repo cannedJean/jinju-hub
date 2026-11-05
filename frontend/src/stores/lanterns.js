@@ -6,6 +6,10 @@ export function kstToday(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(now)
 }
 
+// True while restore() runs, so listeners can tell an undo from a genuinely new light.
+let restoring = false
+export const isRestoring = () => restoring
+
 let nowProvider = () => new Date()
 export function setNowProvider(fn) {
   nowProvider = fn || (() => new Date())
@@ -63,7 +67,12 @@ export const useLanternsStore = defineStore('lanterns', {
     // Undo for unsave: puts back the full snapshot (incl. lit fields).
     restore(item) {
       if (!item?.id || this.items[item.id]) return
-      this.items[item.id] = { ...item }
+      restoring = true
+      try {
+        this.items[item.id] = { ...item }
+      } finally {
+        restoring = false
+      }
       this.persist()
     },
     setBase(base) {

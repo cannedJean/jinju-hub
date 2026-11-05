@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import AppTabBar from './components/layout/AppTabBar.vue'
 import DemoBanner from './components/layout/DemoBanner.vue'
+import WakingBanner from './components/layout/WakingBanner.vue'
 import ChatWidget from './components/ChatWidget.vue'
 import CelebrationToast from './components/lanterns/CelebrationToast.vue'
 import { useBreakpoint } from './composables/useBreakpoint'
@@ -23,15 +24,23 @@ router.isReady().then(() => {
     lanterns.setDemo({ enabled: true, today: lanterns.demo.today, pos: lanterns.demo.pos })
   }
 })
-// Header progress and badge toasts need the collection definition; a failure just leaves 0/30.
-onMounted(async () => {
+// Header progress and badge toasts need the collection definition; a failure shows "–/30"
+// and is retried on every navigation.
+async function loadCollection() {
   try {
     await collection.load()
     collection.checkBadges()
   } catch {
-    // retried on the next load (e.g. visiting 내 유등)
+    // retried on the next navigation or load
   }
-})
+}
+onMounted(loadCollection)
+watch(
+  () => route.fullPath,
+  () => {
+    if (!collection.loaded) loadCollection()
+  },
+)
 
 const { isMobile } = useBreakpoint()
 // Map-first pages fill the viewport exactly (no page scroll, no footer).
@@ -43,6 +52,7 @@ const fullscreen = computed(() => !!route.meta.fullscreen)
     class="flex flex-col relative bg-page"
     :class="[fullscreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen', { 'pb-14': isMobile }]"
   >
+    <WakingBanner />
     <DemoBanner :active="lanterns.demo.enabled" :date="lanterns.demo.today || ''" />
     <AppHeader />
     <main class="flex-1 w-full relative" :class="{ 'min-h-0': fullscreen }">
