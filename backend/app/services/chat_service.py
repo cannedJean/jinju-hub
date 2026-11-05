@@ -1,4 +1,5 @@
 """Chatbot: Claude answers grounded on places.db (+ festivals, weather, board posts)."""
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -8,6 +9,7 @@ from typing import Literal
 
 import anthropic
 from anthropic import AsyncAnthropic
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -26,6 +28,8 @@ MAX_PLACES = 6
 MAX_FESTIVALS = 3
 MAX_POSTS = 3
 HISTORY_LIMIT = 10
+# Weather is optional context; cap it so a slow KMA call cannot push chat past the frontend's 30 s timeout.
+WEATHER_TIMEOUT_SECONDS = 3
 
 # keyword -> category code (checked by substring; an intent may match several categories)
 TYPE_KEYWORDS: dict[str, str] = {
@@ -189,7 +193,12 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
 
     if any(w in message for w in POST_WORDS):
         post_cat = next((POST_CATEGORY[c] for c in cats if c in POST_CATEGORY), None)
-        for post in board_service.search_posts(db, terms, category=post_cat, limit=MAX_POSTS):
+        try:
+            posts = board_service.search_posts(db, terms, category=post_cat, limit=MAX_POSTS)
+        except SQLAlchemyError as exc:  # board DB down or not migrated: answer without post context
+            logger.warning("chat post context unavailable: %s", type(exc).__name__)
+            posts = []
+        for post in posts:
             line = f"[post:{post.id}] {_clean(post.title)} | 게시글 | {_clean(post.content, 150)}"
             out.items.append(_Item("post", "post", str(post.id), post.title, line, _clean(post.title)))
     return out
@@ -201,7 +210,7 @@ async def gather_context(
     out = await run_in_threadpool(_retrieve, message, repo, db, today)
     if settings is not None and any(w in message for w in WEATHER_WORDS):
         try:
-            w = await fetch_weather(settings)
+            w = await asyncio.wait_for(fetch_weather(settings), WEATHER_TIMEOUT_SECONDS)
             out.weather = f"진주 {w.condition}, {round(float(w.temperature))}°C. {w.recommendation_reason}"
         except Exception:  # noqa: BLE001 - weather is optional context; never fail the chat on it
             logger.info("chat weather context unavailable")

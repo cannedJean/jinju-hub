@@ -2,9 +2,24 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+
+def client_ip(request: Request) -> str:
+    """Rate-limit key that a client cannot spoof behind Render's proxy.
+
+    Prefer True-Client-IP (set by Render's edge), else the LAST X-Forwarded-For hop (appended by the
+    proxy in front of us; earlier entries are client-controlled), else the socket peer.
+    """
+    true_ip = request.headers.get("true-client-ip", "").strip()
+    if true_ip:
+        return true_ip
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    if hops:
+        return hops[-1]
+    return request.client.host if request.client else "unknown"
+
+
+limiter = Limiter(key_func=client_ip, default_limits=[])
 
 
 _current_limit = "10/minute"

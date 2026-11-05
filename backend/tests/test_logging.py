@@ -129,3 +129,11 @@ def test_filter_is_idempotent():
     first = record.getMessage()
     flt.filter(record)
     assert record.getMessage() == first and "S1" not in first
+
+
+def test_dsn_password_masked():
+    from app.core.logging import mask_secrets
+
+    out = mask_secrets("connect failed: postgresql://neonuser:p4ss-W0rd@ep-x.neon.tech/db?sslmode=require")
+    assert "p4ss-W0rd" not in out
+    assert "postgresql://neonuser:***@ep-x.neon.tech/db" in out

@@ -16,6 +16,7 @@ _MASK_PATTERNS = [
     re.compile(r"(?i)(authKey\s*=\s*)[^&\s\"']+"),
     re.compile(r"(?i)(api[_-]?key[\"']?\s*[=:]\s*[\"']?)[^&\s\"',]+"),
     re.compile(r"(?i)(x-api-key[\"']?\s*[=:]\s*[\"']?)[^&\s\"',]+"),
+    re.compile(r"(://[^:/\s@]+:)[^@\s]+(?=@)"),  # DSN password: scheme://user:***@host
 ]
 _SK_ANT = re.compile(r"sk-ant-[A-Za-z0-9_\-]+")
 

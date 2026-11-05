@@ -20,7 +20,7 @@ def get_posts(db: Session, page: int, size: int, keyword: str | None = None, cat
 
     total = query.count()
     items = (
-        query.order_by(BoardPost.created_at.desc())
+        query.order_by(BoardPost.created_at.desc(), BoardPost.id.desc())
         .offset((page - 1) * size)
         .limit(size)
         .all()
@@ -43,7 +43,7 @@ def search_posts(db: Session, terms: list[str], category: str | None = None, lim
             predicates.extend((BoardPost.title.ilike(like), BoardPost.content.ilike(like)))
         query = query.filter(or_(*predicates))
 
-    return query.order_by(BoardPost.created_at.desc()).limit(limit).all()
+    return query.order_by(BoardPost.created_at.desc(), BoardPost.id.desc()).limit(limit).all()
 
 
 def get_post(db: Session, post_id: int):

@@ -320,3 +320,24 @@ def test_marker_with_inner_whitespace(repo, db, monkeypatch):
     _patch(monkeypatch, FakeClient(text=f"하연옥 [place: {HAYEON} ] 추천"))
     res = _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED))
     assert [s.id for s in res.sources] == [HAYEON] and "[place" not in res.answer
+
+
+def test_board_table_unavailable_does_not_break_chat(make_client, tmp_path, caplog):
+    # Board DB exists but has no tables -> search_posts raises OperationalError.
+    c = make_client(places_db_path=FIXTURE_DB, database_url=f"sqlite:///{(tmp_path / 'empty.db').as_posix()}")
+    with caplog.at_level(logging.WARNING, logger="jinjuhub.chat"):
+        r = c.post("/api/chat", json={"message": "냉면 후기 알려줘"})
+    assert r.status_code == 200
+    assert r.json()["sources"] and all(s["type"] == "place" for s in r.json()["sources"])
+    assert any("post context unavailable" in rec.getMessage() for rec in caplog.records)
+
+
+def test_slow_weather_is_skipped(repo, db, monkeypatch):
+    async def slow(settings):
+        await asyncio.sleep(2)
+        return SimpleNamespace(condition="맑음", temperature=18.0, recommendation_reason="x")
+
+    monkeypatch.setattr(chat_service, "fetch_weather", slow)
+    monkeypatch.setattr(chat_service, "WEATHER_TIMEOUT_SECONDS", 0.05, raising=False)
+    ctx, _ = asyncio.run(build_context("오늘 날씨 어때", repo, db, TODAY, _settings()))
+    assert "[날씨]" not in ctx

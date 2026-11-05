@@ -68,3 +68,58 @@ def test_hash_and_verify():
     h = hash_password("abcd")
     assert h.startswith("$2b$12$") and verify_password("abcd", h) and not verify_password("abce", h)
     assert verify_password("abcd", "not-a-hash") is False
+
+
+def _req(headers: dict[str, str], host: str = "10.0.0.9"):
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+        "client": (host, 1234),
+    }
+    return Request(scope)
+
+
+def test_client_ip_prefers_true_client_ip_then_last_forwarded_hop():
+    from app.core.ratelimit import client_ip
+
+    assert client_ip(_req({"True-Client-IP": "1.1.1.1", "X-Forwarded-For": "6.6.6.6, 2.2.2.2"})) == "1.1.1.1"
+    assert client_ip(_req({"X-Forwarded-For": "6.6.6.6, 7.7.7.7,  2.2.2.2 "})) == "2.2.2.2"
+    assert client_ip(_req({"X-Forwarded-For": "2.2.2.2"})) == "2.2.2.2"
+    assert client_ip(_req({})) == "10.0.0.9"
+    assert client_ip(_req({"True-Client-IP": "  ", "X-Forwarded-For": " , "})) == "10.0.0.9"
+
+
+def test_rate_limit_ignores_spoofed_leftmost_forwarded_for(db_client):
+    c = db_client(rate_limit="2/minute")
+    limiter.enabled = True
+    codes = [
+        c.post("/api/posts", json=PAYLOAD, headers={"X-Forwarded-For": f"9.9.9.{i}, 2.2.2.2"}).status_code
+        for i in range(3)
+    ]
+    assert codes == [201, 201, 429]
+    # A different real last hop is a different client with its own bucket.
+    assert c.post("/api/posts", json=PAYLOAD, headers={"X-Forwarded-For": "9.9.9.1, 3.3.3.3"}).status_code == 201
+
+
+def test_rate_limit_keys_on_true_client_ip(db_client):
+    c = db_client(rate_limit="2/minute")
+    limiter.enabled = True
+    codes = [
+        c.post("/api/posts", json=PAYLOAD, headers={"True-Client-IP": "4.4.4.4", "X-Forwarded-For": f"5.5.5.{i}"})
+        .status_code
+        for i in range(3)
+    ]
+    assert codes == [201, 201, 429]
+    assert c.post("/api/posts", json=PAYLOAD, headers={"True-Client-IP": "8.8.8.8"}).status_code == 201
+
+
+def test_list_order_breaks_created_at_ties_by_id_desc(db_client):
+    c = db_client()
+    for i in range(3):
+        _create(c, title=f"글{i}")
+    with c.app.state.db_engine.begin() as conn:
+        conn.execute(text("update board_posts set created_at = '2026-11-05 10:00:00'"))
+    ids = [p["id"] for p in c.get("/api/posts").json()["items"]]
+    assert ids == sorted(ids, reverse=True)

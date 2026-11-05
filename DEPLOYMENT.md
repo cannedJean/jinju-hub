@@ -18,7 +18,8 @@
 - 브랜치: 지금은 `feat/jinjuhub-mvp`, **`main` 병합 후에는 `main`** (`render.yaml`의 `branch`와 대시보드 설정을 함께 바꾼다).
 - 빌드: `pip install -r requirements.txt && alembic upgrade head && python -m app.scripts.seed_posts`
   (무료 플랜은 셸·preDeploy가 없다. 마이그레이션과 시드는 멱등이라 재배포마다 돌아도 안전하다.)
-- 시작: `uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"` (레이트리밋이 실제 클라이언트 IP를 쓰도록)
+- 시작: `uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"`
+  (레이트리밋 키는 uvicorn이 고른 IP가 아니라 `app/core/ratelimit.py`의 `client_ip`: Render 프록시가 붙이는 `True-Client-IP` → 없으면 `X-Forwarded-For`의 **마지막** 항목 → 소켓 주소. XFF 맨 앞 값은 클라이언트가 위조할 수 있어 쓰지 않는다.)
 - 시크릿 입력(`sync: false`): `DATABASE_URL`, `WEATHER_API_KEY`, `ALLOWED_ORIGINS`(처음엔 비워 두거나 임시값). `ANTHROPIC_API_KEY`는 마지막 챗봇 테스트 때 추가.
 - 확인: `https://<render-service>.onrender.com/api/health` 200.
 
@@ -56,6 +57,11 @@
 ## 4. 배포 검증
 - 라이브 e2e: `cd frontend && BASE_URL=https://<site>.netlify.app npx playwright test --project=desktop --project=mobile` (`BASE_URL`이 있으면 로컬 webServer를 띄우지 않는다).
   - 결과: `TODO(controller): 라이브 e2e 결과`
+- 레이트리밋 위조 방지 확인 (부작용 없음: 없는 글 삭제 시도라 404만 쌓인다). `X-Forwarded-For` 맨 앞 값을 매번 바꿔도 11번째가 `429`여야 한다. 모두 `404`면 키가 위조 가능한 상태다.
+  ```bash
+  for i in $(seq 1 11); do curl -s -o /dev/null -w "%{http_code} " -X DELETE https://<render-service>.onrender.com/api/posts/999999 -H "Content-Type: application/json" -H "X-Forwarded-For: 203.0.113.$i" -d '{"password":"xxxx"}'; done; echo
+  # 기대: 404 ×10 다음 429 (RATE_LIMIT=10/minute). 1분 뒤 다시 404.
+  ```
 - 수동 확인: 게시글 작성 → Render "Manual Deploy"로 재배포 → 글 유지(원격 저장), 실기기에서 HTTPS 위치 권한 프롬프트, 챗봇 실답변(장소 출처 포함).
 
 ## 5. 콜드스타트 주의
