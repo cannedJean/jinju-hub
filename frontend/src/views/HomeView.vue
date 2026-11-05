@@ -38,11 +38,37 @@ watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festiv
 <template>
   <div>
     <section class="bg-night-900 text-white px-4 md:px-8 py-14 md:py-20 text-center">
-      <h1 class="text-[28px] md:text-[44px] font-extrabold text-lantern-500">진주, 남강에 유등을 띄우다</h1>
-      <p class="mt-3 text-[15px] md:text-[18px] text-white/80">내일 갈 곳을 담고, 도착하면 유등을 밝혀요</p>
+      <h1 class="text-[28px] md:text-[44px] font-extrabold text-lantern-500">빅데이터와 AI로 밝히는 진주의 밤 · 머무르고 싶은 여행</h1>
+      <p class="mt-3 text-[15px] md:text-[18px] text-white/80 max-w-[860px] mx-auto">1,250개 공공 데이터와 실시간 분석으로 혼잡은 피하고, 숨은 명소는 더 깊게. 낮의 촉석루부터 밤의 유등까지 나만의 체류형 여정을 완성하세요.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-2 max-w-[800px] mx-auto">
+        <span
+          data-test="value-prop-chip"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] md:text-[14px] font-medium bg-white/10 text-lantern-400 border border-white/15 backdrop-blur-sm"
+        >
+          📊 1,250+ 공공 빅데이터
+        </span>
+        <span
+          data-test="value-prop-chip"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] md:text-[14px] font-medium bg-white/10 text-lantern-400 border border-white/15 backdrop-blur-sm"
+        >
+          🌙 대한민국 1호 야간관광 특화도시
+        </span>
+        <span
+          data-test="value-prop-chip"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] md:text-[14px] font-medium bg-white/10 text-lantern-400 border border-white/15 backdrop-blur-sm"
+        >
+          🤖 Claude AI 스마트 여행 비서
+        </span>
+        <span
+          data-test="value-prop-chip"
+          class="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] md:text-[14px] font-medium bg-white/10 text-lantern-400 border border-white/15 backdrop-blur-sm"
+        >
+          🏮 유등 게이미피케이션 동선 유도
+        </span>
+      </div>
       <router-link
         to="/explore"
-        class="inline-block mt-6 px-6 py-3 rounded-full bg-lantern-500 text-night-900 font-bold text-[16px]"
+        class="inline-block mt-8 px-6 py-3 rounded-full bg-lantern-500 text-night-900 font-bold text-[16px] hover:bg-lantern-400 transition-colors shadow-lg"
       >
         지도에서 탐색
       </router-link>
