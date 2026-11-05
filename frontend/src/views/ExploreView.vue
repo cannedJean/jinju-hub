@@ -551,8 +551,11 @@ onBeforeUnmount(() => {
       <BottomSheet v-if="isMobile" ref="sheetRef" v-model:snap="sheetSnap" :summary="countText" label="장소 목록">
         <template #header>
           <form role="search" class="relative" @submit.prevent="submitSearch">
+            <label for="sheet-search" class="sr-only">장소 검색</label>
             <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px]" aria-hidden="true">🔍</span>
             <input
+              id="sheet-search"
+              name="search"
               v-model="searchText"
               type="search"
               enterkeyhint="search"

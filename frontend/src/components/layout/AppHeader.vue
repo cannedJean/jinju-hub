@@ -56,7 +56,10 @@ function submit() {
     </router-link>
 
     <form v-if="!isMobile" class="flex-1 max-w-[360px]" role="search" @submit.prevent="submit">
+      <label for="header-search" class="sr-only">장소 검색</label>
       <input
+        id="header-search"
+        name="search"
         v-model="query"
         type="search"
         placeholder="장소, 음식, 축제 검색"
