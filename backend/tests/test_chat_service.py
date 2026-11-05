@@ -1002,6 +1002,20 @@ def test_accessibility_question_gets_a_not_available_note(real_like_repo, db):
     assert "접근성" not in chat_service._retrieve("진주성 근처 냉면", real_like_repo, db, TODAY).context()
 
 
+def test_info_question_with_a_time_word_keeps_the_place(real_like_repo, db):
+    # "저녁 운영시간" asks about the place, not for dinner
+    for msg in ("진주성 저녁 운영시간 알려줘", "진주성 저녁 입장료", "진주성 아침 일찍 열어요?"):
+        q = chat_service._analyze_query(msg)
+        assert q.info, msg
+        assert not chat_service._time_means_meal(q, real_like_repo, {}), msg
+
+
+def test_diet_question_gets_a_not_available_note(real_like_repo, db):
+    ret = chat_service._retrieve("채식하는 사람도 먹을 수 있는 식당 있어요?", real_like_repo, db, TODAY)
+    assert "식단" in ret.context() and "없음" in ret.context()
+    assert "식단" not in chat_service._retrieve("진주성 근처 냉면", real_like_repo, db, TODAY).context()
+
+
 def test_unknown_english_word_near_an_anchor_is_noted(real_like_repo, db):
     ret = chat_service._retrieve("진주성 근처 bakery", real_like_repo, db, TODAY)
     assert "찾지 못함" in ret.context()

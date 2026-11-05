@@ -149,6 +149,15 @@ def _includes(*ids):
     return check
 
 
+def _in_top(n, *ids):
+    # an info question about a place ("진주성 저녁 운영시간") must keep that place near the top of the context
+    def check(ret, places, rows):
+        top = [p["id"] for p in places[:n]]
+        ok = bool(set(top) & set(ids))
+        return ok, "" if ok else f"top {n}: {[p['title'] for p in places[:n]]}"
+    return check
+
+
 def _landmark_not_branches(*ids):
     # A shop branch named after the landmark ("LG전자 베스트샵 진주성점") is not about the landmark.
     def check(ret, places, rows):
@@ -537,6 +546,9 @@ CASES = [
     ("R3", "진주성이랑 국립진주박물관 둘 다 보고 근처에서 묶어서 볼 만한 곳", _castle_and_museum),
     ("C5", "진주 " * 200 + "냉면 국밥 비빔밥 카페 숙소 축제 야경 박물관", _no_crash),
     # fix round 4 (controller-defined rows)
+    ("R5", "진주성 저녁 운영시간 알려줘", _in_top(3, *CASTLE_SIGHTS)),
+    ("R5", "국립진주박물관 저녁에도 열어?", _in_top(1, NATIONAL_MUSEUM)),
+    ("R5", "진주성 아침 일찍 열어요?", _in_top(3, *CASTLE_SIGHTS)),
     ("R4", "진주성 근처 점심", _food_all_near((CASTLE,), 2000, 3)),
     ("R4", "유등축제 보고 저녁", _lantern_dinner),
     ("R4", "남강 근처 저녁 추천", _min_category("food", 3)),

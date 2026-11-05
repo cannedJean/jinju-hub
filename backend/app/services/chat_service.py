@@ -156,6 +156,11 @@ _LOOSE_PREFIX = {"먹", "식사", "야간", "야경", "밤늦", "심야", "어�
 PARKING_PREFIX = "주차"
 ACCESS_WORDS = ("휠체어", "유모차", "장애", "접근성", "계단")
 ACCESS_NOTE = "접근성(휠체어·유모차·계단) 정보는 데이터에 없음 · 이용하기 편하다고 단정하지 말고 방문 전 확인 권장"
+DIET_WORDS = ("채식", "비건", "베지", "할랄", "알레르기", "글루텐")
+DIET_NOTE = "식단(채식·할랄·알레르기) 정보는 데이터에 없음 · 맞는 메뉴가 있다고 단정하지 말고 식당에 확인 권장"
+# a question about the place itself (hours, fees, opening): a time word there is when, not a meal
+INFO_WORDS = ("운영", "영업", "시간", "입장", "요금", "가격", "열어", "열려", "여는", "여나", "닫", "휴관", "휴무",
+              "개방", "관람", "몇시", "일찍")
 # Parking texts that carry no information ("전화문의", "-") or say there is none.
 _NO_PARKING_INFO = re.compile(r"[-\s]*|전화\s*문의.*|.*불가.*")
 # Only these keywords are suppressed inside a proper noun (국립진주박물관); 진주냉면 still asks for food.
@@ -279,6 +284,8 @@ class _Query(NamedTuple):
     generic_festival: bool = False  # 축제/행사 as a bare intent word (not inside a festival name)
     parking: bool = False
     access: bool = False
+    diet: bool = False  # diet question (채식/할랄/...): the data has no such information
+    info: bool = False  # a question about the place itself (hours, fees): never a meal reading
 
 
 def _strip_particle(tok: str) -> str:
@@ -367,7 +374,7 @@ def _analyze_query(message: str, titles: list[str] | None = None) -> _Query:
     found: dict[str, _Term] = {}
     excluded: list[str] = []
     cats: list[str] = []
-    night = kids = time_word = activity = generic_festival = parking = access = False
+    night = kids = time_word = activity = generic_festival = parking = access = diet = info = False
     for idx, tok in enumerate(toks):
         if _is_negation(tok):
             continue
@@ -402,6 +409,11 @@ def _analyze_query(message: str, titles: list[str] | None = None) -> _Query:
         if tok.startswith(ACCESS_WORDS):
             access = True
             continue
+        if tok.startswith(DIET_WORDS):
+            diet = True
+            continue
+        if tok.startswith(INFO_WORDS):
+            info = True
         # "구경하고 점심": an outing done first (…하고, not …하고 싶은) does not make the question an outing
         sequenced = tok.endswith(("고", "고서")) and not nxt.startswith("싶")
         activity = activity or (tok.startswith(_ACTIVITY_PREFIXES) and not sequenced)
@@ -423,7 +435,7 @@ def _analyze_query(message: str, titles: list[str] | None = None) -> _Query:
         cats.append("food")  # "저녁 추천해줘": a time of day alone means a meal (_retrieve also looks past
         # location and filler words: "진주성 근처 점심", _time_means_meal)
     return _Query(terms, excluded, list(dict.fromkeys(cats)), night, kids, time_word, activity, generic_festival,
-                  parking, access)
+                  parking, access, diet, info)
 
 
 def _detect_categories(message: str) -> list[str]:
@@ -806,7 +818,7 @@ def _time_means_meal(q: _Query, repo: PlacesRepo, festivals: dict[str, list[dict
     """A time of day reads as a meal when nothing else says what to find: every term says where (a location,
     a landmark, a festival name) or names nothing (filler): "진주성 근처 점심", "유등축제 보고 저녁". An outing
     word, the night, another category or a bare 축제 question ("저녁에 하는 축제") keep it a time."""
-    if (not q.time_word or q.activity or q.night or q.generic_festival or not q.terms
+    if (not q.time_word or q.info or q.activity or q.night or q.generic_festival or not q.terms
             or any(c != "festival" for c in q.categories)):
         return False
 
@@ -857,7 +869,8 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
             venue = next((v for r in named[t.text] if (v := _festival_venue(repo, r)) is not None), None)
             if venue is not None:
                 break
-    out = Retrieval(today=today, access_note=ACCESS_NOTE if q.access else None)
+    notes = [n for n, on in ((ACCESS_NOTE, q.access), (DIET_NOTE, q.diet)) if on]
+    out = Retrieval(today=today, access_note=" / ".join(notes) or None)
 
     # A festival question searches places only for a category it asks for or what else it names specifically
     # (never a generic list).
