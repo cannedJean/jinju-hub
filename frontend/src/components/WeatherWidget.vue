@@ -91,11 +91,19 @@ onMounted(loadWeather)
       :title="`${weather.condition || ''} · ${weather.source || ''}`"
     >
       <span aria-hidden="true" data-test="weather-icon">{{ weatherIcon }}</span>
-      <span class="md:hidden">{{ temperature || '진주' }}</span>
-      <span class="hidden md:inline">진주 {{ temperature }}</span>
-      <span v-if="recommendationLabel" :class="props.compact ? 'hidden lg:inline' : 'hidden md:inline'">
-        · {{ recommendationLabel }}
-      </span>
+      <template v-if="props.compact">
+        <span class="md:hidden">{{ temperature || '진주' }}</span>
+        <span class="hidden md:inline">진주 {{ temperature }}</span>
+        <span v-if="recommendationLabel" class="hidden lg:inline">
+          · {{ recommendationLabel }}
+        </span>
+      </template>
+      <template v-else>
+        <span>진주 {{ temperature }}</span>
+        <span v-if="recommendationLabel">
+          · {{ recommendationLabel }}
+        </span>
+      </template>
     </div>
     <router-link
       v-if="weather?.recommendation === 'indoor'"
