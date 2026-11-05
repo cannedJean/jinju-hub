@@ -80,6 +80,9 @@ function onKeydown(e) {
   bottom: 88px;
   transform: translateX(-50%);
   z-index: 300;
+  /* left: 50% would cap the shrink-to-fit width at half the viewport and wrap the text. */
+  width: max-content;
+  max-width: calc(100vw - 32px);
   padding: 12px 20px;
   border-radius: 999px;
   background: var(--color-night-900);
@@ -135,6 +138,12 @@ function onKeydown(e) {
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+/* Mobile: clear the tab bar and the chat bubble above it (ChatWidget bottom 72px + 64px). */
+@media (max-width: 767px) {
+  .toast {
+    bottom: 148px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -270,6 +270,8 @@ const TABS = [
   bottom: 88px;
   transform: translateX(-50%);
   z-index: 250;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -283,5 +285,11 @@ const TABS = [
 .undo__btn {
   color: var(--color-lantern-500);
   font-weight: 800;
+}
+/* Mobile: clear the tab bar and the chat bubble above it (ChatWidget bottom 72px + 64px). */
+@media (max-width: 767px) {
+  .undo {
+    bottom: 148px;
+  }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup>
-import { nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '../stores/chat'
 import { useLanternsStore } from '../stores/lanterns'
@@ -11,6 +12,12 @@ const chat = useChatStore()
 const { history, loading, error, errorMessage } = storeToRefs(chat)
 
 const isOpen = ref(false)
+const route = useRoute()
+// Closed bubble on mobile: above the bottom tab bar (56px), or above the collapsed list sheet
+// (96px more) on full-screen map pages, so neither the 더보기 tab nor the sheet is covered.
+const bubblePosition = computed(() =>
+  route?.meta?.fullscreen ? 'bottom-[164px] right-6 md:bottom-6' : 'bottom-[72px] right-6 md:bottom-6',
+)
 const input = ref('')
 const chatBody = ref(null)
 const inputElement = ref(null)
@@ -77,7 +84,7 @@ async function saveSource(link) {
 <template>
   <div
     class="fixed z-[100]"
-    :class="isOpen ? 'inset-0 md:inset-auto md:bottom-6 md:right-6' : 'bottom-6 right-6'"
+    :class="isOpen ? 'inset-0 md:inset-auto md:bottom-6 md:right-6' : bubblePosition"
   >
     <div
       v-if="isOpen"
