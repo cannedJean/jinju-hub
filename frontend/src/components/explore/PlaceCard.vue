@@ -89,7 +89,7 @@ const saveLabel = computed(() => {
       <div v-if="canSetBase" class="mt-1.5">
         <button
           type="button"
-          class="place-card__action"
+          class="place-card__action min-h-[44px]"
           :class="{ 'place-card__action--on': isBase }"
           :disabled="isBase"
           @click.stop="emit('set-base', place)"
@@ -102,7 +102,7 @@ const saveLabel = computed(() => {
     <div class="flex-none flex flex-col items-center gap-1.5">
       <button
         type="button"
-        class="place-card__icon place-card__save"
+        class="place-card__icon place-card__save min-h-[44px] min-w-[44px]"
         :class="{ 'is-saved': saved && !lit, 'is-lit': lit }"
         :aria-pressed="lit ? undefined : String(saved)"
         :aria-label="saveLabel"
@@ -115,7 +115,7 @@ const saveLabel = computed(() => {
       <button
         v-if="hasCoords"
         type="button"
-        class="place-card__icon place-card__map"
+        class="place-card__icon place-card__map min-h-[44px] min-w-[44px]"
         :aria-label="`${place.title} 지도에서 보기`"
         title="지도에서 보기"
         @click.stop="emit('select', place.id)"
@@ -201,7 +201,7 @@ const saveLabel = computed(() => {
   text-underline-offset: 2px;
 }
 .place-card__action {
-  height: 28px;
+  min-height: 44px;
   padding: 0 10px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
@@ -223,8 +223,10 @@ const saveLabel = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1px solid var(--color-border);
   background: var(--color-surface);

@@ -25,7 +25,7 @@ const visiblePages = computed(() => {
   >
     <button
       type="button"
-      class="w-9 h-9 flex items-center justify-center rounded-lg border border-border text-strong disabled:opacity-30 hover:bg-page transition-colors focus:outline-none"
+      class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg border border-border text-strong disabled:opacity-30 hover:bg-page transition-colors focus:outline-none"
       :disabled="page <= 1"
       aria-label="이전 페이지"
       @click="$emit('update:page', page - 1)"
@@ -38,7 +38,7 @@ const visiblePages = computed(() => {
         v-for="p in visiblePages"
         :key="p"
         type="button"
-        class="w-9 h-9 flex items-center justify-center rounded-lg transition-colors text-[14px] focus:outline-none"
+        class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors text-[14px] focus:outline-none"
         :class="p === page ? 'bg-primary text-white font-bold' : 'text-strong hover:bg-page'"
         :aria-current="p === page ? 'page' : undefined"
         @click="$emit('update:page', p)"
@@ -49,7 +49,7 @@ const visiblePages = computed(() => {
 
     <button
       type="button"
-      class="w-9 h-9 flex items-center justify-center rounded-lg border border-border text-strong disabled:opacity-30 hover:bg-page transition-colors focus:outline-none"
+      class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg border border-border text-strong disabled:opacity-30 hover:bg-page transition-colors focus:outline-none"
       :disabled="page >= totalPages"
       aria-label="다음 페이지"
       @click="$emit('update:page', page + 1)"

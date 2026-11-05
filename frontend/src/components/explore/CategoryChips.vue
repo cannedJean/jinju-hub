@@ -43,7 +43,7 @@ const indoorOn = () => props.tags.includes('indoor')
   >
     <button
       type="button"
-      class="chip"
+      class="chip min-h-[44px]"
       :class="{ 'chip--on': categories.length === 0 }"
       :aria-pressed="String(categories.length === 0)"
       @click="emit('update:categories', [])"
@@ -54,7 +54,7 @@ const indoorOn = () => props.tags.includes('indoor')
       v-for="code in CATEGORY_CODES"
       :key="code"
       type="button"
-      class="chip"
+      class="chip min-h-[44px]"
       :class="{ 'chip--on': categories.includes(code) }"
       :aria-pressed="String(categories.includes(code))"
       @click="toggle(code)"
@@ -74,7 +74,7 @@ const indoorOn = () => props.tags.includes('indoor')
 
     <button
       type="button"
-      class="chip chip--quick"
+      class="chip chip--quick min-h-[44px]"
       :class="{ 'chip--on': indoorOn(), 'chip--recommended': indoorRecommended && !indoorOn() }"
       :aria-pressed="String(indoorOn())"
       :title="indoorRecommended ? '오늘 진주 날씨엔 실내 활동을 추천해요' : '실내에서 즐길 수 있는 곳만 보기'"
@@ -93,7 +93,7 @@ const indoorOn = () => props.tags.includes('indoor')
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
