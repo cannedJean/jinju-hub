@@ -200,9 +200,42 @@ def test_like_search_matches_menu(repo):
     assert [i.title for i in page.items] == ["하연옥 하대점"]
 
 
-def test_menu_texts(repo):
-    assert repo.menu_texts([]) == {}
-    real = "jh-016bfa03dd"  # 하연옥 하대점 has a menu
-    ids = [f"nope-{i}" for i in range(600)] + [real]  # real id lands in the second 500-id chunk
-    out = repo.menu_texts(ids)
-    assert set(out) == {real} and "냉면" in out[real]
+def test_fts_search_matches_menu_only_terms(repo):
+    # "어린이함박스테이크"/"돌판참갈비" (3+ chars -> FTS path) appear only in 하연옥's menu column (C2/C19).
+    for q in ("돌판참갈비", "함박스테이크"):
+        page = repo.search(PlaceQuery(q=q))
+        assert repo.last_search_mode == "fts"
+        assert [i.title for i in page.items] == ["하연옥 하대점"], q
+        assert page.total == 1
+
+
+def test_fts_menu_union_keeps_fts_hits_first_and_escapes(repo):
+    page = repo.search(PlaceQuery(q="촉석루"))
+    assert page.items and "촉석루" in page.items[0].title  # FTS (bm25) hits still rank first
+    assert repo.search(PlaceQuery(q="100%_\\\\")).total == 0  # LIKE wildcards stay literal in the menu union
+    assert repo.search(PlaceQuery(q="돌판참갈비", category=["sight"])).total == 0  # filters still apply
+
+
+def test_chat_rows_snapshot(repo):
+    rows = repo.chat_rows()
+    assert rows is repo.chat_rows()  # cached: the DB is read-only
+    by_id = {r.id: r for r in rows}
+    hayeon = by_id["jh-016bfa03dd"]
+    assert hayeon.category == "food" and "냉면" in hayeon.menu_l and hayeon.title == "하연옥 하대점"
+    assert isinstance(hayeon.tags, tuple) and hayeon.distance_m is None
+    assert len(rows) == repo.search(PlaceQuery(size=1)).total
+
+
+def test_real_db_menu_search_three_chars():
+    from pathlib import Path
+
+    real = Path(__file__).resolve().parents[1] / "app" / "data" / "places.db"
+    if not real.is_file():
+        pytest.skip("real places.db not present")
+    r = PlacesRepo(real)
+    try:
+        titles = [i.title for i in r.search(PlaceQuery(q="칼국수")).items]
+        assert r.last_search_mode == "fts"
+        assert {"진주팥죽", "진주팥죽칠암점"} <= set(titles)
+    finally:
+        r.close()
