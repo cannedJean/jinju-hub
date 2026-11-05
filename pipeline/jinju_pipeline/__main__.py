@@ -1,4 +1,4 @@
-"""CLI: ``python -m jinju_pipeline run|verify-codes|report``.
+"""CLI: ``python -m jinju_pipeline run [--incremental | --from-raw]|verify-codes|report``.
 
 Exit codes: 0 gate passed, 1 gate failed, 2 configuration error (ConfigError, locked places.db,
 missing report).
@@ -25,6 +25,7 @@ from jinju_pipeline.region import load_region
 from jinju_pipeline.runner import run_pipeline
 from jinju_pipeline.settings import Settings, get_settings
 from jinju_pipeline.sources.tourapi import verify_codes
+from jinju_pipeline.state import STATE_FILE
 
 RUNNER_RUN_QUOTA = 300
 
@@ -40,9 +41,12 @@ def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python -m jinju_pipeline")
     sub = ap.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run", help="collect -> clean -> merge -> load -> report")
-    run.add_argument("--incremental", action="store_true")
+    mode = run.add_mutually_exclusive_group()
+    mode.add_argument("--incremental", action="store_true")
+    mode.add_argument("--from-raw", action="store_true",
+                      help="no collection/network: replay the raw records stored in the previous places.db")
     run.add_argument("--today", type=date.fromisoformat, help="YYYY-MM-DD (default: today, KST)")
-    run.add_argument("--out", type=Path, help="places.db path (report.json is written next to it)")
+    run.add_argument("--out", type=Path, help="places.db path (report.json, refresh_state.json next to it)")
     run.add_argument("--until", choices=("clean", "merge"))
     sub.add_parser("verify-codes", help="check lDong codes and per-type counts via TourAPI")
     rep = sub.add_parser("report", help="print the report.md of a past run")
@@ -67,11 +71,14 @@ def _cmd_run(args, settings: Settings, transport) -> int:
             "previous_db": settings.previous_db or settings.output_db,  # still the canonical snapshot
             "output_db": args.out,
             "output_report": args.out.parent / "report.json",
+            "previous_state_file": settings.previous_state_file or settings.state_file,
+            "state_file": args.out.parent / STATE_FILE,
         })
     now = datetime.now(KST)
     today = args.today or now.date()
     report, gate = asyncio.run(run_pipeline(
         settings, incremental=args.incremental, today=today, now=now, transport=transport, until=args.until,
+        from_raw=args.from_raw,
     ))
     if args.until:
         print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Protocol
 
 import httpx
@@ -26,6 +26,13 @@ class CollectContext:
     today: date
     limiters: dict[str, RateLimiter]
     collection_keys: set[str] = field(default_factory=set)
+    # source -> start of that source's last successful collection (refresh_state.json); incremental watermark
+    synced_at: dict[str, datetime] = field(default_factory=dict)
+
+
+class SourceSkipped(Exception):
+    """A source cannot run in this configuration (e.g. no API key). Reported as ``skipped``; its previous
+    records are not reused, so the gate sees that the source is missing."""
 
 
 class Source(Protocol):
@@ -45,6 +52,7 @@ def make_context(
     incremental: bool = False,
     today: date | None = None,
     collection_keys: set[str] | None = None,
+    synced_at: dict[str, datetime] | None = None,
 ) -> CollectContext:
     """Build a per-run context; limiters are created fresh each run (no module globals)."""
     return CollectContext(
@@ -61,4 +69,5 @@ def make_context(
             "tourapi": RateLimiter(settings.tour_concurrency, 0.0),
         },
         collection_keys=set(collection_keys or ()),
+        synced_at=dict(synced_at or {}),
     )

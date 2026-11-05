@@ -55,7 +55,8 @@ class JinjuCitySource:
         params = {PAGE_PARAM: page, SIZE_PARAM: PAGE_SIZE}
         body = await fetch_json(
             ctx.client, self._url, params,
-            limiter=ctx.limiters["jinju_city"], ledger=ctx.ledger, source=self.name,
+            # spec 5.9: the city API needs no key, so its pages are counted but never spend the key quota
+            limiter=ctx.limiters["jinju_city"], ledger=ctx.ledger.unmetered(), source=self.name,
         )
         ctx.store.write_page(self.name, page, body, {"url": self._url, "params": params})
         return body

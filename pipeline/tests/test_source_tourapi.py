@@ -7,6 +7,7 @@ import pytest
 from jinju_pipeline.http import ConfigError, QuotaExceeded, QuotaLedger, UpstreamError
 from jinju_pipeline.models import RawRecord
 from jinju_pipeline.raw_store import KST
+from jinju_pipeline.sources.base import SourceSkipped
 from jinju_pipeline.sources.tourapi import (
     CONTENT_TYPES,
     TourApiAreaSource,
@@ -127,10 +128,13 @@ def test_items_of_recorded_responses(fixture_json):
     assert len(items_of(fixture_json("tourapi/sync_p1.json"))[0]) == 2
 
 
-async def test_missing_key_is_config_error(ctx_factory, fixture_json):
-    ctx = ctx_factory(httpx.MockTransport(FakeTour(fixture_json)))
-    with pytest.raises(ConfigError):
-        await TourApiAreaSource().collect(ctx)
+@pytest.mark.parametrize("source", [TourApiAreaSource, TourApiFestivalSource])
+async def test_missing_key_skips_source_without_calls(ctx_factory, fixture_json, source):
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake))
+    with pytest.raises(SourceSkipped, match="no key"):
+        await source().collect(ctx)
+    assert fake.requests == []
 
 
 async def test_area_source_queries_ldong_only(ctx_factory, fixture_json):
@@ -315,8 +319,8 @@ async def test_incremental_uses_sync_list_and_hides(ctx_factory, fixture_json, p
     prev = [_prev_record(fixture_json, i["contentid"],
                          "20260901000000" if i["contentid"] == JINJUSEONG else i["modifiedtime"])
             for i in items]
-    ctx.previous = previous_snapshot({"tourapi.area": prev}, pending={f"tourapi.area:{pending_id}"},
-                                     generated_at=datetime(2026, 10, 20, 3, 0, tzinfo=KST))
+    ctx.previous = previous_snapshot({"tourapi.area": prev}, pending={f"tourapi.area:{pending_id}"})
+    ctx.synced_at = {"tourapi.area": datetime(2026, 10, 20, 3, 0, tzinfo=KST)}
     recs = await TourApiAreaSource().collect(ctx)
     assert not fake.ops("areaBasedList2")
     sync = fake.ops("areaBasedSyncList2")
@@ -338,8 +342,8 @@ async def test_incremental_ignores_sync_items_modified_before_previous_run(
     ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
     ctx.incremental = True
     ctx.today = date(2026, 11, 4)
-    ctx.previous = previous_snapshot({"tourapi.area": _prev_all(fixture_json)},
-                                     generated_at=datetime(2026, 10, 24, 3, 0, tzinfo=KST))
+    ctx.previous = previous_snapshot({"tourapi.area": _prev_all(fixture_json)})
+    ctx.synced_at = {"tourapi.area": datetime(2026, 10, 24, 3, 0, tzinfo=KST)}
     recs = await TourApiAreaSource().collect(ctx)
     assert fake.ops("areaBasedSyncList2")  # the 202610 page still returns both 2026-10-23 items
     assert not fake.ops("detailCommon2")
@@ -351,6 +355,49 @@ async def test_incremental_without_previous_falls_back_to_full(ctx_factory, fixt
     fake = FakeTour(fixture_json)
     ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
     ctx.incremental = True
+    recs = await TourApiAreaSource().collect(ctx)
+    assert fake.ops("areaBasedList2") and not fake.ops("areaBasedSyncList2")
+    assert len(recs) == len(_area_items(fixture_json))
+
+
+async def test_incremental_since_is_tourapis_own_watermark_not_snapshot_time(
+        ctx_factory, fixture_json, previous_snapshot):
+    """A later snapshot (published while tourapi.area was reused) must not move TourAPI's sync window."""
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
+    ctx.incremental = True
+    ctx.today = date(2026, 11, 4)
+    ctx.previous = previous_snapshot({"tourapi.area": [_prev_record(fixture_json)]},
+                                     generated_at=datetime(2026, 10, 30, 3, 0, tzinfo=KST))
+    ctx.synced_at = {"tourapi.area": datetime(2026, 10, 20, 3, 0, tzinfo=KST)}
+    recs = await TourApiAreaSource().collect(ctx)
+    assert not fake.ops("areaBasedList2")
+    assert sorted(r.url.params["modifiedtime"] for r in fake.ops("areaBasedSyncList2")) == ["202610", "202611"]
+    # 진주성 was modified on 2026-10-23: after the TourAPI watermark, before the snapshot's generated_at
+    assert JINJUSEONG in [r.url.params["contentId"] for r in fake.ops("detailCommon2")]
+    assert {r.source_id: r for r in recs}[JINJUSEONG].payload["common"]["title"] == "진주성"
+
+
+async def test_incremental_without_tourapi_watermark_falls_back_to_full(
+        ctx_factory, fixture_json, previous_snapshot):
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
+    ctx.incremental = True
+    ctx.previous = previous_snapshot({"tourapi.area": _prev_all(fixture_json)},
+                                     generated_at=datetime(2026, 11, 3, 3, 0, tzinfo=KST))
+    ctx.synced_at = {"jinju_city.tourinfo": datetime(2026, 11, 3, 3, 0, tzinfo=KST)}  # someone else's
+    await TourApiAreaSource().collect(ctx)
+    assert fake.ops("areaBasedList2") and not fake.ops("areaBasedSyncList2")
+
+
+async def test_incremental_without_previous_tourapi_records_falls_back_to_full(
+        ctx_factory, fixture_json, previous_snapshot):
+    """A city-only previous snapshot: syncing "changes since" would never bring back the other places."""
+    fake = FakeTour(fixture_json)
+    ctx = ctx_factory(httpx.MockTransport(fake), **KEY)
+    ctx.incremental = True
+    ctx.previous = previous_snapshot({"jinju_city.tourinfo": []})
+    ctx.synced_at = {"tourapi.area": datetime(2026, 10, 20, 3, 0, tzinfo=KST)}
     recs = await TourApiAreaSource().collect(ctx)
     assert fake.ops("areaBasedList2") and not fake.ops("areaBasedSyncList2")
     assert len(recs) == len(_area_items(fixture_json))

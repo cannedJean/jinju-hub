@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Previous snapshot (ID inheritance, aliases, 80% gate). None = output_db. `run --out` keeps it on the
     # canonical db so writing elsewhere (e.g. while the backend locks places.db) loses nothing.
     previous_db: Path | None = None
+    # refresh_state.json (reuse streak, per-source watermarks): tracked, committed by data-refresh on every
+    # run. Kept outside backend/ (Render rootDir) and frontend/ so a state-only commit redeploys nothing.
+    state_file: Path = PIPELINE_ROOT / "state" / "refresh_state.json"
+    previous_state_file: Path | None = None  # None = state_file (`run --out` keeps it on the canonical file)
     daily_quota: int = 900
     run_quota: int | None = None
     city_concurrency: int = 4

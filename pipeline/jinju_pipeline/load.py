@@ -182,4 +182,5 @@ def read_previous(path: Path) -> PreviousSnapshot | None:
         modified_by_key=modified_by_key,
         detail_pending_keys=pending,
         reused_streak=int(meta.get("reused_streak") or 0),
+        data_version=meta.get("data_version"),
     )

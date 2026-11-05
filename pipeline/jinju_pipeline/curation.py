@@ -80,8 +80,9 @@ def find_place(places: list[Place], match: dict, exclude: set[str] = frozenset()
     within = match.get("within_m", DEFAULT_WITHIN_M)
     cat = match.get("category")
     best: tuple[float, str, Place] | None = None
+    pid = match.get("id")  # stable place id (manual tags); title_contains stays as a sanity check
     for p in places:
-        if p.id in exclude or (cat and p.category != cat) or not _title_hit(p, needles):
+        if p.id in exclude or (pid and p.id != pid) or (cat and p.category != cat) or not _title_hit(p, needles):
             continue
         if near:
             if p.lat is None or p.lng is None:
@@ -151,21 +152,47 @@ def _add_tags(p: Place, tags: list[str]) -> None:
             p.tags.append(t)
 
 
+def _raw_field(raw: dict, path: str) -> Any:
+    """Dotted path into a stored raw record, e.g. ``list.contenttypeid`` for tourapi.area."""
+    value: Any = raw
+    for key in path.split("."):
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
+def _source_category_hit(p: Place, rules: list[dict]) -> bool:
+    for rule in rules:
+        values = {str(v) for v in rule.get("values", [])}
+        for s in p.sources:
+            if s.source == rule["source"] and str(_raw_field(s.raw, rule["field"]) or "").strip() in values:
+                return True
+    return False
+
+
 def _apply_tags(places: list[Place], spec: dict, unresolved: list[str]) -> None:
     defaults = spec.get("category_defaults") or {}
     keywords = spec.get("keyword_tags") or {}
+    source_rules = spec.get("source_category_tags") or {}  # tag -> [{source, field, values}] on raw records
+    excludes = spec.get("keyword_excludes") or {}  # tag -> title words that veto it (manual entries still win)
+    skip = spec.get("skip_categories") or {}  # tag -> categories its keyword/source rules never tag
+    drops = spec.get("drops_defaults") or {}  # tag -> category-default tags a place loses when it has the tag
     for p in places:
-        _add_tags(p, defaults.get(p.category, []))
         text = f"{p.title} {p.menu or ''}"
-        for tag, words in keywords.items():
-            if any(w in text for w in words):
-                _add_tags(p, [tag])
+        found = [tag for tag, words in keywords.items() if any(w in text for w in words)]
+        found += [tag for tag, rules in source_rules.items() if _source_category_hit(p, rules)]
+        found = [t for t in found if p.category not in skip.get(t, [])]
+        found = list(defaults.get(p.category, [])) + found
+        _add_tags(p, [t for t in found if not any(w in p.title for w in excludes.get(t, []))])
     for entry in spec.get("manual", []):
         p = find_place(places, entry["match"])
         if p is None:
             unresolved.append(f"tags:{match_label(entry['match'])}")
         else:
             _add_tags(p, entry["tags"])
+    for p in places:
+        for tag, dropped in drops.items():
+            if tag in p.tags:
+                p.tags = [t for t in p.tags if t not in dropped or t not in defaults.get(p.category, [])]
 
 
 # ---------------------------------------------------------------- festivals

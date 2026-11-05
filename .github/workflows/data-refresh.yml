@@ -51,15 +51,26 @@ jobs:
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
-          NEW_HASH=$(python -c "import json; print(json.load(open('backend/app/data/report.json'))['content_hash'])")
+          DATA=backend/app/data
+          STATE=pipeline/state/refresh_state.json
+          NEW_HASH=$(python -c "import json; print(json.load(open('$DATA/report.json'))['content_hash'])")
           if [ "$NEW_HASH" = "$OLD_HASH" ]; then
-            echo "content_hash unchanged; nothing to commit"
-            exit 0
+            # Same content: keep the committed places.db/report.json (only meta/timestamps differ), but always
+            # persist $STATE - the reuse streak ("2 runs in a row fails") and TourAPI's watermark.
+            git checkout -- "$DATA/places.db" "$DATA/report.json"
+            if [ -z "$(git status --porcelain -- "$STATE")" ]; then
+              echo "content_hash and refresh state unchanged; nothing to commit"
+              exit 0
+            fi
+            git add "$STATE"
+            MSG="data: refresh state ${{ github.run_id }}"
+          else
+            git add "$DATA/places.db" "$DATA/report.json" "$STATE"
+            MSG="data: weekly refresh ${{ github.run_id }}"
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/app/data/places.db backend/app/data/report.json
-          git commit -m "data: weekly refresh ${{ github.run_id }}"
+          git commit -m "$MSG"
           # If places.db (binary) also changed upstream since checkout, this rebase conflicts and the job
           # fails loudly by design (no auto-merge of a binary DB) - just rerun the workflow on the new HEAD.
           git pull --rebase origin "$REF_NAME"
