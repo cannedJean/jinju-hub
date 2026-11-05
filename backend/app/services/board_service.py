@@ -10,7 +10,7 @@ from app.schemas.board import PostCreate, PostUpdate
 
 def _like_pattern(term: str) -> str:
     """Contains-pattern with LIKE wildcards (% _) and the escape char itself neutralised."""
-    escaped = term.replace("\\", "\\\\").replace("%", "\%").replace("_", "\_")
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
 
 
