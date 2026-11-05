@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import WeatherWidget from '../components/WeatherWidget.vue'
+import { fetchPlace } from '../api/places'
 import { useCollectionStore } from '../stores/collection'
 import { useFestivalsStore } from '../stores/festivals'
 import { useLanternsStore } from '../stores/lanterns'
@@ -13,6 +14,31 @@ const lanterns = useLanternsStore()
 const jinju8 = computed(() => collection.data?.jinju8 || [])
 const total = computed(() => collection.collectionIds.length || 30)
 const progress = computed(() => collection.progress)
+
+const placeImages = ref({})
+const failedImages = ref({})
+
+watch(
+  jinju8,
+  (list) => {
+    for (const p of list) {
+      if (!p.hero_image && !placeImages.value[p.id]) {
+        fetchPlace(p.id)
+          .then((d) => {
+            if (d?.hero_image) {
+              placeImages.value[p.id] = d.hero_image
+            }
+          })
+          .catch(() => {})
+      }
+    }
+  },
+  { immediate: true },
+)
+
+function getHeroImage(p) {
+  return p.hero_image || placeImages.value[p.id] || null
+}
 
 const banner = computed(() => {
   const f = festivals.ongoing[0]
@@ -126,10 +152,33 @@ watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festiv
             <router-link
               :to="`/places/${p.id}`"
               data-test="jinju8-card"
-              class="block bg-card border border-border rounded-xl p-4 h-full hover:border-lantern-500"
+              class="block bg-card border border-border rounded-xl overflow-hidden h-full hover:border-lantern-500 transition-colors flex flex-col"
             >
-              <span class="text-[12px] font-bold text-lantern-500">{{ p.rank }}경</span>
-              <span class="block mt-1 text-[15px] font-bold text-strong">{{ p.title }}</span>
+              <div class="w-full h-32 bg-subtle relative flex items-center justify-center overflow-hidden">
+                <img
+                  v-if="getHeroImage(p) && !failedImages[p.id]"
+                  :src="getHeroImage(p)"
+                  :alt="p.title"
+                  class="w-full h-32 object-contain bg-subtle"
+                  loading="lazy"
+                  decoding="async"
+                  @error="failedImages[p.id] = true"
+                />
+                <div
+                  v-else
+                  data-test="jinju8-fallback"
+                  class="w-full h-32 flex flex-col items-center justify-center text-muted p-2 text-center bg-subtle"
+                >
+                  <span class="text-2xl mb-1" aria-hidden="true">🏛️</span>
+                  <span class="text-[12px] font-bold text-muted line-clamp-1">{{ p.title }}</span>
+                </div>
+              </div>
+              <div class="p-3 flex-1 flex flex-col justify-between">
+                <div>
+                  <span class="text-[12px] font-bold text-lantern-500">{{ p.rank }}경</span>
+                  <span class="block mt-0.5 text-[15px] font-bold text-strong">{{ p.title }}</span>
+                </div>
+              </div>
             </router-link>
           </li>
         </ul>

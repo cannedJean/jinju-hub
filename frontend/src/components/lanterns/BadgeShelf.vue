@@ -3,6 +3,16 @@
 defineProps({ badges: { type: Array, default: () => [] } })
 const req = (b) => Math.max(1, Number(b.required) || 1)
 const cur = (b) => Math.min(Math.max(0, b.progress || 0), req(b))
+
+const BADGE_ICONS = {
+  first_light: '🏮',
+  jinju8: '🏰',
+  food_explorer: '🥢',
+  history_walk: '📜',
+  night_namgang: '🌙',
+  festival_guest: '🎆',
+}
+const badgeIcon = (b) => BADGE_ICONS[b.id] || (b.earned ? '🏆' : '✨')
 </script>
 
 <template>
@@ -14,7 +24,7 @@ const cur = (b) => Math.min(Math.max(0, b.progress || 0), req(b))
       :class="{ 'badge--earned': b.earned }"
       :data-earned="String(b.earned)"
     >
-      <span class="badge__icon" aria-hidden="true">{{ b.earned ? '◆' : '◇' }}</span>
+      <span class="badge__icon" aria-hidden="true">{{ badgeIcon(b) }}</span>
       <div class="min-w-0 flex-1">
         <p class="badge__label">
           {{ b.label }}
@@ -62,6 +72,8 @@ const cur = (b) => Math.min(Math.max(0, b.progress || 0), req(b))
   font-size: 20px;
   background: var(--bg-subtle);
   color: var(--color-muted);
+  filter: grayscale(0.8);
+  opacity: 0.6;
 }
 .badge--earned {
   border-color: var(--color-lantern-500);
@@ -70,6 +82,8 @@ const cur = (b) => Math.min(Math.max(0, b.progress || 0), req(b))
   background: var(--color-lantern-500);
   color: var(--color-night-900);
   box-shadow: 0 0 12px var(--color-lantern-glow);
+  filter: none;
+  opacity: 1;
 }
 .badge__label {
   font-weight: 800;
