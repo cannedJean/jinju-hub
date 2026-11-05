@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { openDemoSettings } from '../../composables/useDemoSettings'
 
 const TABS = [
+  { to: '/', label: '홈', name: '홈', icon: '🏠' },
   { to: '/explore', label: '탐색', icon: '🧭' },
   { to: '/lanterns', label: '내 유등', icon: '🏮' },
   { to: '/festivals', label: '축제', icon: '🎆' },
