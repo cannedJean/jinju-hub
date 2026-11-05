@@ -832,3 +832,86 @@ def test_unmatched_compound_backs_off_to_its_head_noun(tmp_path):
         assert found[0].id == "h-market"
     finally:
         r.close()
+
+
+def test_excluded_words_are_normalized_like_search_terms():
+    assert chat_service._analyze_query("냉면집 말고 다른 맛집").excluded == ["냉면"]
+    assert chat_service._analyze_query("축제는 말고 다른 곳").excluded == ["축제"]
+
+
+def test_term_cap_keeps_priority_terms_then_the_last_ones():
+    msg = "안녕하세요 이번 주말에 처음으로 진주에 놀러 가는데요 혹시 진주성 근처에 분위기 좋은 카페가 있을까요"
+    terms = chat_service._search_terms(msg)
+    assert len(terms) <= chat_service.MAX_TERMS and "진주성" in terms and "카페" in terms
+    assert "안녕하세요" not in terms  # the first filler words are dropped, not the head-final ones
+
+
+def test_time_of_day_sets_food_only_with_a_food_word_or_alone():
+    cats = chat_service._detect_categories
+    assert "food" not in cats("아침에 산책하기 좋은 곳")
+    assert "food" not in cats("저녁에 가볼 만한 곳")
+    assert cats("저녁 추천해줘") == ["food"]
+    assert cats("점심 먹을 곳") == ["food"]
+    assert cats("밥집 추천") == ["food"]
+
+
+def test_keyword_inside_a_proper_noun_sets_no_category():
+    titles = ["국립진주박물관", "진주성"]
+    assert chat_service._analyze_query("국립진주박물관 휴관일", titles).categories == []
+    assert chat_service._analyze_query("박물관 추천", titles).categories == ["culture"]
+
+
+def test_scenic_overview_mention_is_a_real_match(tmp_path):
+    rows = [
+        ("s-maple", "sight", "어느 산", "가을 단풍이 아름답다", "x", 35.1, 128.1, None, None),
+        ("s-8", "sight", "제1경 성", "성곽", "x", 35.1, 128.1, None, 1),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, ["sight"], chat_service._analyze_terms("단풍 명소"), [])
+        assert found[0].id == "s-maple"
+    finally:
+        r.close()
+
+
+def test_unresolved_marked_location_is_noted(real_like_repo, db):
+    ret = chat_service._retrieve("진주썽 근처 맛집", real_like_repo, db, TODAY)
+    assert "'진주썽' 위치를 찾지 못함" in ret.context()
+    assert not any("에서 약 " in i.line for i in ret.items)  # nothing is presented as "near"
+
+
+def test_night_ask_survives_a_festival_question_and_boosts_within_a_category(tmp_path):
+    rows = [
+        ("n-view", "sight", "별빛길", "강변", "x", 35.1, 128.1, None, None),
+        ("st-plain", "stay", "가나호텔", "객실", "x", 35.1, 128.1, None, None),
+        ("st-night", "stay", "하늘호텔", "야경이 보이는 객실", "x", 35.1, 128.1, None, None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        import sqlite3
+        con = sqlite3.connect(r._con.execute("PRAGMA database_list").fetchone()[2])
+        con.execute("UPDATE places SET tags='[\"night_view\"]' WHERE id='n-view'")
+        con.commit()
+        con.close()
+        r._chat_rows = None
+        got = chat_service._rank_places(r, [], [_T("나서")], [], specific_only=True,
+                                        hints=chat_service.NIGHT_HINTS)
+        assert [p.id for p in got.places] == ["n-view"]
+        got = chat_service._rank_places(r, ["stay"], [], [], hints=chat_service.NIGHT_HINTS)
+        assert [p.id for p in got.places] == ["st-night", "st-plain"]
+    finally:
+        r.close()
+
+
+def _T(text):
+    return chat_service._Term(text)
+
+
+def test_any_meok_form_sets_food_intent():
+    assert chat_service._detect_categories("점심 뭐 먹지") == ["food"]
+    assert chat_service._detect_categories("진주에서 꼭 먹어봐야 할 것") == ["food"]
+
+
+def test_filler_words_do_not_claim_nothing_matched_near_the_anchor(real_like_repo, db):
+    ret = chat_service._retrieve("진주성 보고 나서 근처 냉면집", real_like_repo, db, TODAY)
+    assert "찾지 못함" not in ret.context()

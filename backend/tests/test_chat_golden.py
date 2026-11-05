@@ -322,6 +322,73 @@ def _no_digit_titles_top3(ret, places, rows):
     return bool(places) and not bad, f"digit titles={bad}"
 
 
+NIGHT_TEXT = re.compile("야경|야간|조명")
+
+
+def _is_night(p):
+    return "night_view" in (p["tags"] or "") or bool(NIGHT_TEXT.search(_text(p, "title", "overview")))
+
+
+def _night_places(n, festival_id=None):
+    def check(ret, places, rows):
+        night = [p for p in places if _is_night(p)]
+        if festival_id and festival_id not in {i.id for i in ret.items}:
+            return False, f"festival row {festival_id} missing; {len(night)} night"
+        return len(night) >= n, f"{len(night)} night places"
+    return check
+
+
+def _no_word_in_title_menu(word, category):
+    def check(ret, places, rows):
+        bad = [p["title"] for p in places if word in _text(p, "title", "menu")]
+        wrong = [p["title"] for p in places if p["category"] != category]
+        return bool(places) and not bad and not wrong, f"{word}={bad} not {category}={wrong}"
+    return check
+
+
+def _mention_count(pattern, n):
+    rx = re.compile(pattern)
+
+    def check(ret, places, rows):
+        got = [p for p in places if rx.search(_text(p, "title", "overview"))]
+        return len(got) >= n, f"{len(got)} mention {pattern}"
+    return check
+
+
+def _night_stay(ret, places, rows):
+    wrong = [p["title"] for p in places if p["category"] != "stay"]
+    top = [p for p in places[:3] if re.search("야경|전망|뷰|남강", _text(p, "title", "overview"))]
+    return bool(places) and not wrong and len(top) >= 1, f"not stay={wrong}, top3 with view={len(top)}"
+
+
+def _no_food(ret, places, rows):
+    bad = [p["title"] for p in places if p["category"] == "food"]
+    return not bad, f"food={bad}"
+
+
+def _castle_cafes(ret, places, rows):
+    castle = rows[CASTLE]
+    good = [p for p in places if p["category"] == "food" and CAFE_ANY.search(_text(p, "title", "menu", "overview"))
+            and _dist(castle, p) <= 2000]
+    return len(good) >= 3, f"{len(good)} cafés within 2 km"
+
+
+def _typo_castle(ret, places, rows):
+    ctx = ret.context()
+    if "진주썽" in ctx and "찾지 못" in ctx:
+        return True, "noted"
+    castle = rows[CASTLE]
+    far = [p["title"] for p in places if _dist(castle, p) > 2000]
+    return bool(places) and not far, f"no note; far={far}"
+
+
+def _castle_and_museum(ret, places, rows):
+    ids = {p["id"] for p in places}
+    bad = [p["title"] for p in places if "묘" in p["title"] or "고문서" in p["title"]]
+    ok = NATIONAL_MUSEUM in ids and bool(ids & CASTLE_SIGHTS) and not bad
+    return ok, f"museum={NATIONAL_MUSEUM in ids} castle={bool(ids & CASTLE_SIGHTS)} bad={bad}"
+
+
 def _no_crash(ret, places, rows):
     return True, f"{len(places)} places"
 
@@ -373,6 +440,19 @@ CASES = [
     ("R2", "진주성 근처 갈만한 곳", _castle_sights_near),
     ("R2", "진주 처음 오는데 하루 동안 꼭 가봐야 할 곳 좀 알려줄래요?", _first_visit),
     ("R2", "숙소 추천해줘", _no_digit_titles_top3),
+    # fix round 3 (controller-defined rows)
+    ("R3", "유등축제 끝나고 남강 근처에서 야경 보면서 산책할 곳", _night_places(3, LANTERN_FESTIVAL)),
+    ("R3", "유등축제 보고 나서 야경 볼 곳", _night_places(3)),
+    ("R3", "냉면집 말고 다른 맛집", _no_word_in_title_menu("냉면", "food")),
+    ("R3", "단풍 명소", _mention_count("단풍", 3)),
+    ("R3", "드라이브 코스 추천", _mention_count("드라이브|일주도로", 2)),
+    ("R3", "야경 좋은 숙소", _night_stay),
+    ("R3", "아침에 산책하기 좋은 곳", _no_food),
+    ("R3", "밥집 추천", _all_category("food")),
+    ("R3", "안녕하세요, 이번 주말에 처음으로 진주에 놀러 가는데요, 혹시 진주성 근처에 분위기 좋은 카페가 있을까요?",
+     _castle_cafes),
+    ("R3", "진주썽 근처 맛집", _typo_castle),
+    ("R3", "진주성이랑 국립진주박물관 둘 다 보고 근처에서 묶어서 볼 만한 곳", _castle_and_museum),
     ("C5", "진주 " * 200 + "냉면 국밥 비빔밥 카페 숙소 축제 야경 박물관", _no_crash),
 ]
 
