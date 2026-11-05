@@ -1,9 +1,9 @@
 {
-  "run_id": "20261105T113949+0900",
-  "generated_at": "2026-11-05T11:39:50+09:00",
+  "run_id": "20261105T115734+0900",
+  "generated_at": "2026-11-05T11:57:34+09:00",
   "out_of_bbox_final": 0,
   "reused_streak": 0,
-  "content_hash": "6b19f086d7f0211897d858c6443a6c76adad4fd000b6df76236061797e9290a4",
+  "content_hash": "380987ddad44346b4f57e61ced8339c1652e1ad93000a7ce214abef9c199608a",
   "replayed_from": "20261104T125916+0900",
   "sources": [
     {
@@ -108,5 +108,10 @@
   "quota_used": 0,
   "unresolved_curation": [],
   "unresolved_tags": [],
-  "elapsed_s": 0.58
+  "elapsed_s": 0.75,
+  "gate": {
+    "passed": true,
+    "failures": [],
+    "warnings": []
+  }
 }

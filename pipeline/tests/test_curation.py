@@ -272,3 +272,22 @@ def test_operational_manual_indoor_ids_resolve(repo_root):
     finally:
         con.close()
 
+
+def test_published_db_has_no_outdoor_heritage_tagged_indoor(repo_root):
+    """M5 contract on the built DB: no tomb, stele, beacon, fortress, pagoda, burial mound or fossil site
+    carries the indoor tag, and indoor never comes with outdoor."""
+    import json
+    import re
+    import sqlite3
+
+    db = repo_root / "backend" / "app" / "data" / "places.db"
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        rows = [(t, json.loads(tags)) for t, tags in con.execute("select title, tags from places")]
+    finally:
+        con.close()
+    indoor = [(t, tags) for t, tags in rows if "indoor" in tags]
+    assert 30 <= len(indoor) <= 60, len(indoor)
+    bad = [t for t, _ in indoor if re.search(r"묘|비\(|봉수대|산성|석탑|고분|화석", t)]
+    assert bad == []
+    assert [t for t, tags in indoor if "outdoor" in tags] == []
