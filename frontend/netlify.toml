@@ -1,6 +1,10 @@
+# Base directory(`frontend`)는 Netlify UI(Site configuration > Build & deploy)에서 설정한다.
 [build]
   command = "npm run build"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
 
 # SPA fallback so deep links / refresh work (e.g. /boards/1)
 [[redirects]]

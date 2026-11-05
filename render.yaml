@@ -1,0 +1,31 @@
+# Render Blueprint — JinjuHub API (FastAPI). 자세한 순서: DEPLOYMENT.md
+services:
+  - type: web
+    name: jinjuhub-api
+    runtime: python
+    region: singapore
+    plan: free
+    # 배포 중인 브랜치. main 병합 후에는 main 으로 바꾼다.
+    branch: feat/jinjuhub-mvp
+    rootDir: backend
+    # 무료 플랜은 셸/preDeployCommand 가 없으므로 마이그레이션과 시드를 빌드에 포함한다 (둘 다 멱등).
+    buildCommand: pip install -r requirements.txt && alembic upgrade head && python -m app.scripts.seed_posts
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: DATABASE_URL # Neon pooled connection string
+        sync: false
+      - key: WEATHER_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY # 마지막 챗봇 테스트 때 추가
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-5-5
+      - key: ALLOWED_ORIGINS # Netlify 주소, 끝 슬래시 없음
+        sync: false
+      - key: RATE_LIMIT
+        value: 10/minute
+      - key: DEMO_DATE_OVERRIDE_ENABLED
+        value: "true"
