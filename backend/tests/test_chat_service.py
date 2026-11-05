@@ -341,3 +341,29 @@ def test_slow_weather_is_skipped(repo, db, monkeypatch):
     monkeypatch.setattr(chat_service, "WEATHER_TIMEOUT_SECONDS", 0.05, raising=False)
     ctx, _ = asyncio.run(build_context("오늘 날씨 어때", repo, db, TODAY, _settings()))
     assert "[날씨]" not in ctx
+
+
+def test_search_terms_strip_particles_and_fillers():
+    assert chat_service._search_terms("진주성 근처에서 저녁으로 먹을 만한 냉면집 추천해줘") == ["진주성", "냉면"]
+
+
+def test_merge_ranks_by_terms_matched_then_specificity():
+    def p(i):
+        return SimpleNamespace(id=f"p{i}")
+
+    common = [p(i) for i in range(1, 9)] + [p(20)]  # term A: many hits, also contains p20
+    rare = [p(30), p(20)]  # term B: few hits, p20 matches both
+    merged = chat_service._merge_hits([common, rare])
+    ids = [x.id for x in merged]
+    assert ids[0] == "p20"  # matches both terms
+    assert ids[1] == "p30"  # rarer term before the common one
+    assert ids[2:] == ["p1", "p2", "p3", "p4"]
+    assert len(ids) == chat_service.MAX_PLACES
+    assert ids == [x.id for x in chat_service._merge_hits([common, rare])]  # deterministic
+
+
+def test_food_query_returns_naengmyeon_place(repo, db):
+    ret = chat_service._retrieve("진주성 근처에서 저녁으로 먹을 만한 냉면집 추천해줘", repo, db, TODAY)
+    ids = [i.id for i in ret.items if i.group == "place"]
+    assert HAYEON in ids
+    assert "냉면" in ret.items[0].title or ret.items[0].id == HAYEON

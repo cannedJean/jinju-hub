@@ -49,7 +49,11 @@ STOP_WORDS = {
     "진주", "진주시", "여행", "근처", "주변", "부근", "갈만한", "곳", "장소", "추천", "정보", "어디",
     "이번", "주말", "오늘", "내일", "게시글", "커뮤니티", "후기", "리뷰", "날씨", "기온", "알려줘",
     "알려주세요", "추천해줘", "찾아줘", "보여줘", "있어", "있나요", "좀", "비", "오는", "날", "에서", "에서의",
+    "저녁", "점심", "아침", "먹을", "만한", "반나절", "둘러볼", "동안", "하루", "코스",
 }
+# Trailing particles stripped from a token when the remaining stem keeps at least 2 chars (longest first).
+_PARTICLES = ("에서", "으로", "로", "에", "의", "을", "를", "이", "가", "은", "는", "도")
+_MERGE_LIMIT = 50  # per-term hit list size used to judge specificity (PlaceQuery.size max)
 INDOOR_WORDS = ("실내", "비가", "비 오", "비오", "우천")
 WEATHER_WORDS = ("날씨", "기온", "실내", "실외", "야외", "비가", "비 오", "비오", "우산", "더워", "추워")
 POST_WORDS = ("게시글", "커뮤니티", "후기", "리뷰")
@@ -120,6 +124,11 @@ def _search_terms(message: str) -> list[str]:
     for tok in re.findall(r"[가-힣A-Za-z0-9]+", message.lower()):
         if len(tok) > 2 and tok.endswith("집"):  # 냉면집 -> 냉면
             tok = tok[:-1]
+        if tok not in STOP_WORDS:
+            for suffix in _PARTICLES:
+                if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
+                    tok = tok[: -len(suffix)]
+                    break
         if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
             continue
         if tok.startswith(("알려", "추천", "찾아", "보여")):
@@ -145,20 +154,39 @@ def _place_line(
     return line, brief
 
 
+def _merge_hits(hit_lists: list[list], terms: list[str] | None = None) -> list:
+    """Merge per-term hit lists: most terms matched first, then fewest address-only matches (a place name
+    like 진주성 also occurs in street names), then the rarest matched term, then original rank."""
+    matched: dict[str, int] = {}
+    weak: dict[str, int] = {}
+    rarest: dict[str, int] = {}
+    first: dict[str, tuple[int, int]] = {}
+    place: dict[str, object] = {}
+    for li, hits in enumerate(hit_lists):
+        term = terms[li].lower() if terms else None
+        for pos, p in enumerate(hits):
+            matched[p.id] = matched.get(p.id, 0) + 1
+            rarest[p.id] = min(rarest.get(p.id, len(hits)), len(hits))
+            first.setdefault(p.id, (li, pos))
+            place.setdefault(p.id, p)
+            if term and term in (getattr(p, "addr", None) or "").lower() and term not in (p.title or "").lower():
+                weak[p.id] = weak.get(p.id, 0) + 1
+    order = sorted(place, key=lambda i: (-matched[i], weak.get(i, 0), rarest[i], first[i]))
+    return [place[i] for i in order[:MAX_PLACES]]
+
+
 def _search_places(repo: PlacesRepo, categories: list[str], terms: list[str], tags: list[str]) -> list:
-    def run(q: str | None, sort: str = "relevance"):
+    def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES):
         return repo.search(
-            PlaceQuery(q=q, category=categories, tags=tags, sort=sort, size=MAX_PLACES)  # type: ignore[arg-type]
+            PlaceQuery(q=q, category=categories, tags=tags, sort=sort, size=size)  # type: ignore[arg-type]
         ).items
 
     if terms:
         found = run(" ".join(terms))
-        if not found and len(terms) > 1:  # AND over every term was too strict: merge per-term hits
-            seen: dict[str, object] = {}
-            for t in terms:
-                for p in run(t):
-                    seen.setdefault(p.id, p)
-            found = list(seen.values())[:MAX_PLACES]
+        if len(found) < MAX_PLACES and len(terms) > 1:  # AND was too strict: top up with per-term hits
+            seen = {p.id for p in found}
+            extra = _merge_hits([run(t, size=_MERGE_LIMIT) for t in terms], terms)
+            found = found + [p for p in extra if p.id not in seen][: MAX_PLACES - len(found)]
         if found:
             return found
     # No search terms, or none matched: always hand the model some representative places.

@@ -22,7 +22,7 @@ _M_PER_DEG = 111_320.0
 _MAX_ALIAS_HOPS = 5
 _NEARBY_M = 1000
 _NEARBY_N = 6
-_LIKE_ANY = "(p.title LIKE ? ESCAPE '\\' OR p.addr LIKE ? ESCAPE '\\' OR p.overview LIKE ? ESCAPE '\\')"
+_LIKE_ANY = "(p.title LIKE ? ESCAPE '\\' OR p.addr LIKE ? ESCAPE '\\' OR p.overview LIKE ? ESCAPE '\\' OR p.menu LIKE ? ESCAPE '\\')"
 _LIKE_RANK = "CASE WHEN p.title LIKE ? ESCAPE '\\' THEN 0 WHEN p.addr LIKE ? ESCAPE '\\' THEN 1 ELSE 2 END, p.title"
 
 
@@ -126,7 +126,7 @@ class PlacesRepo:
             for t in tokens:
                 pat = "%" + _like_escape(t) + "%"
                 where.append(_LIKE_ANY)
-                params += [pat, pat, pat]
+                params += [pat, pat, pat, pat]
             if tokens:
                 pat = "%" + _like_escape(tokens[0]) + "%"
                 order, order_params = _LIKE_RANK, [pat, pat]

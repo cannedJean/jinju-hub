@@ -191,3 +191,10 @@ def test_query_input_caps():
         PlaceQuery(q="가" * 201)
     with pytest.raises(ValidationError):
         PlaceQuery(near=(35.1, 128.1), radius=0)
+
+
+def test_like_search_matches_menu(repo):
+    # "육전" (2 chars -> LIKE path) appears only in 하연옥's menu column.
+    page = repo.search(PlaceQuery(q="육전"))
+    assert repo.last_search_mode == "like"
+    assert [i.title for i in page.items] == ["하연옥 하대점"]
