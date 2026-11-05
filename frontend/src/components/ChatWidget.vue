@@ -54,9 +54,12 @@ function closeChat() {
 async function submit(text) {
   const message = String(text ?? '').trim()
   if (!message || loading.value) return
+  const typed = message === input.value.trim()
   input.value = ''
   saveFailed.value = false
-  await chat.send(message)
+  const answered = await chat.send(message)
+  // A failed send gives the typed text back, so it is never lost.
+  if (!answered && typed && !input.value) input.value = message
 }
 
 // Saves a place source to the lantern list; the summary comes from the place API.
@@ -150,6 +153,13 @@ async function saveSource(link) {
           >
             {{ msg.content }}
           </div>
+          <p
+            v-if="msg.role === 'assistant' && msg.fallback"
+            data-test="chat-fallback-note"
+            class="mt-1 text-[12px] text-muted"
+          >
+            AI 답변을 만들 수 없어 검색 결과로 안내했어요.
+          </p>
 
           <div
             v-if="msg.sources && msg.sources.length"
