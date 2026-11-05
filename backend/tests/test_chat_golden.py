@@ -149,6 +149,15 @@ def _includes(*ids):
     return check
 
 
+def _landmark_not_branches(*ids):
+    # A shop branch named after the landmark ("LG전자 베스트샵 진주성점") is not about the landmark.
+    def check(ret, places, rows):
+        ok, note = _includes(*ids)(ret, places, rows)
+        branches = [p["title"] for p in places if p["category"] == "shopping"]
+        return ok and not branches, note or (f"branches: {branches}" if branches else "")
+    return check
+
+
 def _all_cafes(ret, places, rows):
     bad = [p["title"] for p in places if not _is_cafe(p)]
     return bool(places) and not bad, f"not cafés: {bad}" if bad else ("no places" if not places else "")
@@ -202,7 +211,7 @@ CASES = [
     ("reg", "가족 여행 추천", _nonempty),
     # landmark questions keep the landmark (C1)
     ("C1", "진주성 야경", _includes(*CASTLE_SIGHTS)),
-    ("C1", "진주성 가볼만해?", _includes(*CASTLE_SIGHTS)),
+    ("C1", "진주성 가볼만해?", _landmark_not_branches(*CASTLE_SIGHTS)),
     ("C1", "국립진주박물관 휴관일 알려줘", _includes(NATIONAL_MUSEUM)),
     # other review findings
     ("C2", "칼국수 맛집 추천해줘", _all_match("칼국수", category="food")),

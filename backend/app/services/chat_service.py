@@ -290,12 +290,17 @@ def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> Plac
                                      len(p.title), p.id))
 
 
+def _in_title(title_l: str, word: str) -> bool:
+    """`word` names this place, not only its branch: '롯데하이마트 진주성점' is not about 진주성."""
+    return word in title_l.replace(word + "점", "")
+
+
 def _hit_weight(row: PlaceText, term: str, area: bool) -> float:
     """Weight of the best field `term` (or a synonym / its tag) hits in `row`; 0.0 when it hits nothing.
 
     `area`: the term is a 동/읍/면 name, so an address hit counts too."""
     words = (term, *_TERM_SYNONYMS.get(term, ()))
-    if any(w in row.title_l or w in row.menu_l for w in words) or _TERM_TAGS.get(term) in row.tags:
+    if any(_in_title(row.title_l, w) or w in row.menu_l for w in words) or _TERM_TAGS.get(term) in row.tags:
         return _W_TITLE + (_W_EXACT_TITLE if _norm_title(row.title_l) == term else 0.0)
     if any(w in row.overview_l for w in words) or (area and term in row.addr_l):
         return _W_OVERVIEW
