@@ -467,3 +467,30 @@ def test_generic_noun_never_anchors(real_like_repo):
 def test_anchor_fallback_when_no_target_hits(real_like_repo):
     pairs, found = _titles(real_like_repo, "진주성 근처 볶음면")
     assert pairs and all(_haversine_m(_LM_LAT, _LM_LNG, p.lat, p.lng) <= 3000 for p in found)
+
+
+def test_home_word_never_anchors_and_is_not_a_target(real_like_repo, monkeypatch):
+    asked = []
+    orig = chat_service._resolve_landmark
+    monkeypatch.setattr(chat_service, "_resolve_landmark",
+                        lambda repo, term, strict=False: asked.append(term) or orig(repo, term, strict))
+    assert chat_service._search_terms("우리집 근처 카페") == ["우리집", "카페"]
+    pairs, found = _titles(real_like_repo, "우리집 근처 카페")
+    assert all(p.category == "food" for p in found) and "커피0 카페" in [t for _, t in pairs]
+    assert "우리" not in asked
+
+
+def test_restaurant_not_over_stripped():
+    assert chat_service._search_terms("진주성 근처 레스토랑") == ["진주성", "레스토랑"]
+    assert chat_service._search_terms("코로나 사랑") == ["코로나", "사랑"]
+
+
+def test_fallback_keeps_food_intent(real_like_repo):
+    _, found = _titles(real_like_repo, "진주성 근처 볶음면")
+    assert found and all(p.category == "food" for p in found)
+
+
+def test_activity_word_is_target_not_location():
+    assert not chat_service._has_location_shape("체험활동")
+    assert chat_service._has_location_shape("가좌동")
+    assert [t.text for t in chat_service._analyze_terms("체험활동 알려줘")] == ["체험활동"]

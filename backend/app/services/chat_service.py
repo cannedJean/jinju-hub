@@ -61,7 +61,12 @@ _ADMIN_AREAS = (
     "금산면", "집현면", "미천면", "명석면", "대평면", "수곡면",
 )
 # Nouns that name a kind of place, never one specific landmark: they must not become the distance anchor.
-_GENERIC_PLACES = {"공원", "시장", "집", "우리집", "역", "학교", "카페", "식당", "호텔"}
+_GENERIC_PLACES = {"공원", "시장", "집", "우리집", "저희집", "역", "학교", "카페", "식당", "호텔", "숙소"}
+_HOME_WORDS = {"우리집", "저희집"}  # always a location without coordinates, never a search target
+# Words ending in a particle-like syllable that is part of the word.
+_NO_STRIP = {"레스토랑", "코로나", "바나나", "하나", "사랑", "자랑", "마루나"}
+# Words ending in 동 that are not neighbourhood names.
+_NOT_AREA_ENDINGS = ("활동", "운동", "행동", "이동", "감동", "자동", "소동")
 # Dish/type words (besides the TYPE_KEYWORDS keys) that identify what the user is looking for.
 _DISH_WORDS = {
     "국수", "칼국수", "순대", "삼겹살", "갈비", "장어", "치킨", "커피", "볶음면", "쫄면", "밀면", "짜장면", "라면",
@@ -149,15 +154,16 @@ class _Term(NamedTuple):
 def _normalize_token(tok: str) -> tuple[str, bool] | None:
     """Lower-cased token -> (search term, shop-suffix stripped), or None when it is not searchable."""
     shop = False
-    if tok not in STOP_WORDS:
+    if tok not in STOP_WORDS and tok not in _NO_STRIP:
         for suffix in _PARTICLES:
             if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
                 tok = tok[: -len(suffix)]
                 break
-    for suffix in _SHOP_SUFFIXES:  # after the particle: 냉면집에서 -> 냉면
-        if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
-            tok, shop = tok[: -len(suffix)], True
-            break
+    if tok not in _GENERIC_PLACES:  # 우리집 stays whole; 냉면집에서 -> 냉면
+        for suffix in _SHOP_SUFFIXES:
+            if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
+                tok, shop = tok[: -len(suffix)], True
+                break
     if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
         return None
     if tok.startswith(("알려", "추천", "찾아", "보여")):
@@ -186,7 +192,8 @@ def _search_terms(message: str) -> list[str]:
 
 
 def _has_location_shape(term: str) -> bool:
-    return (len(term) >= 3 and term.endswith("동")) or term in _ADMIN_AREAS
+    return ((len(term) >= 3 and term.endswith("동") and not term.endswith(_NOT_AREA_ENDINGS))
+            or term in _ADMIN_AREAS)
 
 
 def _is_dish_word(term: str) -> bool:
@@ -216,16 +223,16 @@ def _search_places(repo: PlacesRepo, categories: list[str], terms: list[_Term], 
     terms the PRIMARY ones (dish words; else a 집-stripped term; else the last term) are a required filter, the
     rest only boost. Strong matches (title or menu) rank ahead of overview-only ones, each tier nearest first."""
 
-    def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES, **kw):
+    def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES, cats: list[str] | None = None, **kw):
         return repo.search(
-            PlaceQuery(q=q, category=categories, tags=tags, sort=sort, size=size, **kw)  # type: ignore[arg-type]
+            PlaceQuery(q=q, category=categories if cats is None else cats, tags=tags, sort=sort, size=size, **kw)  # type: ignore[arg-type]
         ).items
 
     anchor: tuple[float, float] | None = None
     locations: list[str] = []
     targets: list[_Term] = []
     for t in terms:  # explicit locations first, so an unmarked word cannot steal the anchor
-        if t.marked or _has_location_shape(t.text):
+        if t.marked or _has_location_shape(t.text) or t.text in _HOME_WORDS:
             locations.append(t.text)
             anchor = anchor or _resolve_landmark(repo, t.text)
     for t in terms:
@@ -238,10 +245,12 @@ def _search_places(repo: PlacesRepo, categories: list[str], terms: list[_Term], 
         else:
             targets.append(t)
 
+    food_intent = False  # looking for a dish or a shop: fallbacks must stay within food
     if targets:
         primary = ([t.text for t in targets if _is_dish_word(t.text)]
                    or [t.text for t in targets if t.shop] or [targets[-1].text])
         secondary = [t.text for t in targets if t.text not in primary]
+        food_intent = any(_is_dish_word(t.text) or t.shop for t in targets if t.text in primary)
         sort = "distance" if anchor else "relevance"
         place: dict[str, object] = {}
         first: dict[str, tuple[int, int]] = {}
@@ -273,8 +282,9 @@ def _search_places(repo: PlacesRepo, categories: list[str], terms: list[_Term], 
 
             return [place[i] for i in sorted(place, key=key)[:MAX_PLACES]]
 
+    fb_cats = (categories or ["food"]) if food_intent else None
     if anchor:
-        found = run(None, "distance", MAX_PLACES, near=anchor, radius=_ANCHOR_RADIUS_M)
+        found = run(None, "distance", MAX_PLACES, cats=fb_cats, near=anchor, radius=_ANCHOR_RADIUS_M)
         if found:
             return found
     elif terms:
@@ -282,6 +292,10 @@ def _search_places(repo: PlacesRepo, categories: list[str], terms: list[_Term], 
         if found:
             return found
     # No search terms, or none matched: always hand the model some representative places.
+    if fb_cats:
+        found = run(None, "collection", cats=fb_cats)
+        if found:
+            return found
     return run(None, "collection") or (_search_places(repo, [], [], []) if categories or tags else [])
 
 

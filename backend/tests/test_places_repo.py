@@ -198,3 +198,11 @@ def test_like_search_matches_menu(repo):
     page = repo.search(PlaceQuery(q="육전"))
     assert repo.last_search_mode == "like"
     assert [i.title for i in page.items] == ["하연옥 하대점"]
+
+
+def test_menu_texts(repo):
+    assert repo.menu_texts([]) == {}
+    real = "jh-016bfa03dd"  # 하연옥 하대점 has a menu
+    ids = [f"nope-{i}" for i in range(600)] + [real]  # real id lands in the second 500-id chunk
+    out = repo.menu_texts(ids)
+    assert set(out) == {real} and "냉면" in out[real]
