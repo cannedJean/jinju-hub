@@ -669,9 +669,77 @@ def test_category_word_used_as_location_is_not_an_intent():
     assert chat_service._detect_categories("숙소 추천") == ["stay"]
 
 
-def test_photo_and_kid_words_are_not_text_terms():
-    assert chat_service._search_terms("촉석루 야경 사진 찍기 좋은 곳") == ["촉석루", "야경"]
-    assert chat_service._analyze_terms("아이랑 갈만한 곳")[0].text in chat_service.KID_WORDS
+def test_photo_night_and_kid_words_are_not_text_terms():
+    q = chat_service._analyze_query("촉석루 야경 사진 찍기 좋은 곳")
+    assert [t.text for t in q.terms] == ["촉석루"] and q.night
+    q = chat_service._analyze_query("아이들과 밤에 갈만한 곳")
+    assert q.kids and q.night and q.terms == []
+
+
+def test_intent_lexicon_matches_prefix_plus_particles_only():
+    q = chat_service._analyze_query("국립진주박물관 근처 점심 먹을 곳")
+    assert q.categories == ["food"] and [t.text for t in q.terms] == ["국립진주박물관"]
+    assert not chat_service._analyze_query("아이스크림 맛집").kids  # 아이 + 스크림 is not 아이 + particles
+    assert not chat_service._analyze_query("밤라떼 카페").night
+    assert chat_service._analyze_query("먹을만한 곳").categories == ["food"]  # loose prefix for verb forms
+
+
+def test_negation_is_applied_before_intents():
+    q = chat_service._analyze_query("축제 말고 다른 볼거리")
+    assert q.excluded == ["축제"] and "festival" not in q.categories
+    q = chat_service._analyze_query("카페 말고 진주 명소")
+    assert q.categories == ["sight"] and q.excluded == ["카페"]
+    q = chat_service._analyze_query("카페 말고도 맛집")  # 말고도 = besides: not a negation
+    assert q.excluded == [] and "food" in q.categories
+
+
+def test_new_particles_need_a_two_char_stem():
+    assert chat_service._search_terms("박물관과 공원까지") == ["박물관", "공원"]
+    assert chat_service._search_terms("함께 사과") == ["함께", "사과"]
+
+
+def test_english_cafe_sets_food_intent():
+    assert chat_service._detect_categories("진주성 근처 coffee") == ["food"]
+    assert chat_service._detect_categories("cafe 추천") == ["food"]
+
+
+def test_festival_without_venues_anchors_on_its_own_row(repo, db):
+    fest = next(r for r in repo.festival_rows() if not r["venue_place_ids"] and r["lat"] is not None)
+    v = chat_service._festival_venue(repo, fest)
+    assert v is not None and v.id == fest["id"]
+
+
+def test_place_results_skip_festival_rows_without_festival_intent(repo, db):
+    ret = chat_service._retrieve("진주성 근처 갈만한 곳", repo, db, TODAY)
+    fest_ids = {r["id"] for r in repo.festival_rows()}
+    assert not [i for i in ret.items if i.group == "place" and i.id in fest_ids]
+
+
+def test_excluded_word_drops_rows_mentioning_it_or_a_synonym(tmp_path):
+    rows = [
+        ("x-cafe", "food", "커피집", "디저트", "x", 35.1, 128.1, None, None),
+        ("x-ov", "food", "한식당", "옆에 카페가 있다", "x", 35.1, 128.1, None, None),
+        ("x-ok", "food", "국밥집", "국밥", "x", 35.1, 128.1, "국밥", None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, ["food"], chat_service._analyze_terms("카페 말고 맛집"), [])
+        assert [p.id for p in found] == ["x-ok"]
+    finally:
+        r.close()
+
+
+def test_overview_only_question_gets_the_curated_order(tmp_path):
+    rows = [
+        ("o-1", "sight", "가나다 공원", "처음 오는데 좋은 곳", "x", 35.1, 128.1, None, None),
+        ("o-8", "sight", "제1경 성", "성곽", "x", 35.1, 128.1, None, 1),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, [], chat_service._analyze_terms("처음 오는데 가볼 곳"), [])
+        assert found[0].id == "o-8"
+    finally:
+        r.close()
 
 
 def _extra_rows_repo(tmp_path, rows):
@@ -737,8 +805,8 @@ def test_anchored_ranking_ignores_location_text_hits(tmp_path):
 def test_coordination_prefers_rows_hitting_every_target(tmp_path):
     # A row hitting one rare word in its title must not outrank a row hitting both words of the question.
     rows = [
-        ("t-junk", "culture", "야경 묘", "묘소", "x", 35.1, 128.1, None, None),
-        ("t-both", "sight", "촉석루 누각", "야경이 아름답다", "x", 35.1, 128.1, None, None),
+        ("t-junk", "culture", "단청 묘", "묘소", "x", 35.1, 128.1, None, None),
+        ("t-both", "sight", "촉석루 누각", "단청이 아름답다", "x", 35.1, 128.1, None, None),
         ("t-one", "sight", "촉석루 앞 광장", "광장", "x", 35.1, 128.1, None, None),
         ("t-one2", "sight", "촉석루 표지석", "돌", "x", 35.1, 128.1, None, None),
         ("t-one3", "sight", "촉석루 쉼터", "쉼터", "x", 35.1, 128.1, None, None),
@@ -746,8 +814,21 @@ def test_coordination_prefers_rows_hitting_every_target(tmp_path):
     ]
     r = _extra_rows_repo(tmp_path, rows)
     try:
-        found = chat_service._search_places(r, [], chat_service._analyze_terms("촉석루 야경"), [])
+        found = chat_service._search_places(r, [], chat_service._analyze_terms("촉석루 단청"), [])
         ids = [p.id for p in found]
         assert ids[0] == "t-both" and ids.index("t-junk") > 0
+    finally:
+        r.close()
+
+
+def test_unmatched_compound_backs_off_to_its_head_noun(tmp_path):
+    rows = [
+        ("h-market", "sight", "중앙시장", "오래된 시장", "x", 35.1, 128.1, None, None),
+        ("h-8", "sight", "제1경 성", "전통시장 옆 성곽", "x", 35.1, 128.1, None, 1),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, [], chat_service._analyze_terms("전통시장 구경"), [])
+        assert found[0].id == "h-market"
     finally:
         r.close()

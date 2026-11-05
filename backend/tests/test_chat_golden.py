@@ -263,6 +263,65 @@ def _castle_food_close(ret, places, rows):
     return len(top) == 3 and not far, f"far={far}"
 
 
+CAFE_ANY = re.compile(r"카페|커피|cafe|coffee", re.I)
+
+
+def _curated(p):
+    return p["jinju8_rank"] is not None or bool(p["is_collection"])
+
+
+def _labelled_food_near(ref_id, max_m, n, word_re=None):
+    def check(ret, places, rows):
+        lines = _place_lines(ret)
+        ref = rows[ref_id]
+        good = [p for p in places if p["category"] == "food"
+                and (word_re is None or word_re.search(_text(p, "title", "menu", "overview")))
+                and _dist(ref, p) <= max_m and LABEL.search(lines[p["id"]])]
+        return len(good) >= n, f"{len(good)} food within {max_m} m, labelled"
+    return check
+
+
+def _gaecheon_cafe(ret, places, rows):
+    if GAECHEON not in {i.id for i in ret.items}:
+        return False, "개천예술제 row missing"
+    return _labelled_food_near(GAECHEON, 5000, 3, CAFE_ANY)(ret, places, rows)
+
+
+def _not_festival_sights(ret, places, rows):
+    sights = [p for p in places if p["category"] in ("sight", "culture")]
+    fest = [p["title"] for p in places if p["category"] == "festival"]
+    return len(sights) >= 4 and not fest, f"{len(sights)} sight/culture, festival places={fest}"
+
+
+def _night_photo(ret, places, rows):
+    night = [p for p in places if "night_view" in (p["tags"] or "")
+             or re.search("야경|야간|조명", _text(p, "title", "overview"))]
+    return len(night) >= 3, f"{len(night)} night places"
+
+
+def _museum_lunch(ret, places, rows):
+    ok, note = _labelled_food_near(NATIONAL_MUSEUM, 2000, 3)(ret, places, rows)
+    bad = [p["title"] for p in places if p["category"] in ("sight", "culture")]
+    return ok and not bad, f"{note}; sight/culture={bad}"
+
+
+def _castle_sights_near(ret, places, rows):
+    castle = rows[CASTLE]
+    fest = [p["title"] for p in places[:4] if p["category"] == "festival"]
+    near = [p for p in places[:6] if p["category"] in ("sight", "culture") and _dist(castle, p) <= 1000]
+    return not fest and len(near) >= 3, f"festival in top4={fest}, {len(near)} sights within 1 km"
+
+
+def _first_visit(ret, places, rows):
+    cur = [p for p in places if _curated(p)]
+    return len(cur) >= 3, f"{len(cur)}/{len(places)} curated"
+
+
+def _no_digit_titles_top3(ret, places, rows):
+    bad = [p["title"] for p in places[:3] if p["title"][:1].isdigit() and not _curated(p)]
+    return bool(places) and not bad, f"digit titles={bad}"
+
+
 def _no_crash(ret, places, rows):
     return True, f"{len(places)} places"
 
@@ -304,6 +363,16 @@ CASES = [
     ("R1", "숙소 근처 맛집", _no_corp_prefix_top3),
     ("R1", "남강 산책로", _namgang_walk),
     ("R1", "진주성 맛집", _castle_food_close),
+    # fix round 2 (controller-defined rows)
+    ("R2", "개천예술제 주변 카페", _gaecheon_cafe),
+    ("R2", "축제 말고 다른 볼거리", _not_festival_sights),
+    ("R2", "아이들과 체험할 수 있는 곳 추천해주세요", _with_kids),
+    ("R2", "밤에 사진 찍기 예쁜 곳 어디야", _night_photo),
+    ("R2", "진주성 근처 coffee", _labelled_food_near(CASTLE, 2000, 3, re.compile("카페|커피|coffee", re.I))),
+    ("R2", "국립진주박물관 근처 점심 먹을 곳", _museum_lunch),
+    ("R2", "진주성 근처 갈만한 곳", _castle_sights_near),
+    ("R2", "진주 처음 오는데 하루 동안 꼭 가봐야 할 곳 좀 알려줄래요?", _first_visit),
+    ("R2", "숙소 추천해줘", _no_digit_titles_top3),
     ("C5", "진주 " * 200 + "냉면 국밥 비빔밥 카페 숙소 축제 야경 박물관", _no_crash),
 ]
 
