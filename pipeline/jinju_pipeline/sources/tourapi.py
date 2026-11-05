@@ -24,7 +24,7 @@ from jinju_pipeline.http import (
 from jinju_pipeline.models import RawRecord
 from jinju_pipeline.raw_store import KST, scrub_secrets
 from jinju_pipeline.settings import Settings
-from jinju_pipeline.sources.base import CollectContext
+from jinju_pipeline.sources.base import CollectContext, SourceSkipped
 
 TOURAPI_BASE = "https://apis.data.go.kr/B551011/KorService2"
 CONTENT_TYPES = (12, 14, 15, 25, 28, 32, 38, 39)
@@ -72,6 +72,12 @@ def _service_key(settings: Settings) -> str:
     return settings.data_go_kr_key.get_secret_value()
 
 
+def _require_key(settings: Settings) -> None:
+    """Without a key the TourAPI sources report ``skipped: no key`` instead of silently disappearing."""
+    if settings.data_go_kr_key is None or not settings.data_go_kr_key.get_secret_value():
+        raise SourceSkipped("no key")
+
+
 def _base_params(settings: Settings) -> dict:
     return {
         "serviceKey": _service_key(settings),
@@ -115,6 +121,7 @@ class TourApiFestivalSource:
     name = FESTIVAL
 
     async def collect(self, ctx: CollectContext) -> list[RawRecord]:
+        _require_key(ctx.settings)
         params = {"eventStartDate": f"{ctx.today.year}0101", **_region_params(ctx.region)}
         items = await _paged(ctx, self.name, "searchFestival2", params, itertools.count(1))
         now = datetime.now(KST)
@@ -138,20 +145,23 @@ class TourApiAreaSource:
     name = AREA
 
     async def collect(self, ctx: CollectContext) -> list[RawRecord]:
-        _service_key(ctx.settings)  # fail fast with ConfigError
+        _require_key(ctx.settings)
         prev = {r.source_id: r for r in (ctx.previous.raw_by_source.get(self.name, []) if ctx.previous else [])}
         pending_ids = {
             k.split(":", 1)[1] for k in (ctx.previous.detail_pending_keys if ctx.previous else set())
             if k.startswith(self.name + ":")
         }
-        incremental = ctx.incremental and ctx.previous is not None
+        # Sync window = TourAPI's own last successful sync (never the snapshot-wide generated_at, which also
+        # moves when this source was reused or skipped). No watermark or no previous TourAPI records -> full list.
+        watermark = ctx.synced_at.get(self.name)
+        incremental = ctx.incremental and watermark is not None and bool(prev)
         page_no = itertools.count(1)
         results: dict[str, RawRecord] = {}
         queue_items: list[dict] = []
         now = datetime.now(KST)
 
         if incremental:
-            since = ctx.previous.generated_at.astimezone(KST).date()
+            since = watermark.astimezone(KST).date()
             pages = await asyncio.gather(*(
                 _paged(ctx, self.name, "areaBasedSyncList2",
                        {"modifiedtime": month, **_region_params(ctx.region)}, page_no)
@@ -160,7 +170,7 @@ class TourApiAreaSource:
             latest: dict[str, dict] = {}
             for item in (i for chunk in pages for i in chunk):
                 if str(item.get("modifiedtime", ""))[:8] < since.strftime("%Y%m%d"):
-                    continue  # same month, but before the previous run
+                    continue  # same month, but before the last successful sync
                 cid = str(item["contentid"])
                 if cid not in latest or str(item.get("modifiedtime", "")) > str(latest[cid].get("modifiedtime", "")):
                     latest[cid] = item

@@ -46,6 +46,7 @@ def build_report(
     out_of_bbox_final: int,
     reused_streak: int,
     content_hash: str,
+    replayed_from: str | None = None,
 ) -> dict:
     places = curated.places
     total = len(places)
@@ -71,6 +72,7 @@ def build_report(
         "out_of_bbox_final": out_of_bbox_final,
         "reused_streak": reused_streak,
         "content_hash": content_hash,
+        "replayed_from": replayed_from,  # run_id whose stored raw records were replayed (run --from-raw)
         "sources": [
             {"source": r.source, "status": r.status, "records": len(r.records), "calls": r.calls, "error": r.error}
             for r in results
@@ -99,7 +101,16 @@ class GateResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def evaluate_gate(report: dict, previous: PreviousSnapshot | None, *, min_first_run: int = 300) -> GateResult:
+def evaluate_gate(
+    report: dict,
+    previous: PreviousSnapshot | None,
+    *,
+    min_first_run: int = 300,
+    previous_source_counts: dict[str, int] | None = None,
+) -> GateResult:
+    """``previous_source_counts``: records per source in the previous published report.json. A source that
+    contributed records to the previous DB must still deliver records (ok or reused), otherwise publishing
+    would silently drop its places (e.g. TourAPI skipped because DATA_GO_KR_KEY is missing)."""
     failures: list[str] = []
     warnings: list[str] = []
     final = report["final_count"]
@@ -107,6 +118,13 @@ def evaluate_gate(report: dict, previous: PreviousSnapshot | None, *, min_first_
     if previous is not None:
         if final < DROP_FLOOR * previous.place_count:
             failures.append(f"final_count {final} < 80% of previous {previous.place_count}")
+        current = {s["source"]: s for s in report["sources"]}
+        for source, count in sorted((previous_source_counts or {}).items()):
+            now = current.get(source)
+            if count > 0 and (now is None or now["records"] == 0):
+                detail = "missing" if now is None else now["status"] + (f" ({now['error']})" if now["error"] else "")
+                failures.append(f"source {source} contributed {count} records to the previous DB "
+                                f"but has 0 records in this run: {detail}")
     elif final < min_first_run:
         failures.append(f"final_count {final} < first-run minimum {min_first_run}")
 

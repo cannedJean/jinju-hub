@@ -24,7 +24,7 @@ class RawRecord(BaseModel):
 
 class SourceResult(BaseModel):
     source: str
-    status: Literal["ok", "failed", "reused_previous"]
+    status: Literal["ok", "failed", "reused_previous", "skipped"]
     records: list[RawRecord]
     calls: int = 0
     error: str | None = None
@@ -112,3 +112,4 @@ class PreviousSnapshot:
     modified_by_key: dict[str, str]
     detail_pending_keys: set[str]
     reused_streak: int = 0
+    data_version: str | None = None  # run_id of the published run (meta.data_version)

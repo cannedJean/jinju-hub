@@ -161,3 +161,40 @@ def test_coords_thresholds_per_category(tmp_path):
     write_report(rep, g, tmp_path / "r.json", tmp_path / "r.md")
     md = (tmp_path / "r.md").read_text(encoding="utf-8")
     assert "culture ≥ 0.55" in md and "회귀 감시선" in md
+
+
+def _with_sources(rep, *sources):
+    rep["sources"] = [{"source": s, "status": st, "records": n, "calls": 0, "error": err}
+                      for s, st, n, err in sources]
+    return rep
+
+
+def test_gate_fails_when_a_previous_source_is_skipped():
+    rep = _with_sources(_build(_healthy_places()),
+                        ("jinju_city.tourinfo", "ok", 3, None),
+                        ("tourapi.area", "skipped", 0, "skipped: no key"))
+    g = evaluate_gate(rep, _prev(3), previous_source_counts={"jinju_city.tourinfo": 3, "tourapi.area": 199})
+    assert not g.passed
+    assert any("tourapi.area" in f and "199" in f and "skipped: no key" in f for f in g.failures)
+
+
+def test_gate_fails_when_a_previous_source_is_absent_or_empty():
+    rep = _with_sources(_build(_healthy_places()), ("tourapi.festival", "ok", 0, None))
+    g = evaluate_gate(rep, _prev(3), previous_source_counts={"tourapi.area": 5, "tourapi.festival": 8})
+    assert not g.passed
+    assert any("tourapi.area" in f and "missing" in f for f in g.failures)
+    assert any("tourapi.festival" in f for f in g.failures)
+
+
+def test_gate_ignores_sources_that_did_not_contribute_before():
+    rep = _with_sources(_build(_healthy_places()),
+                        ("jinju_city.tourinfo", "ok", 3, None),
+                        ("tourapi.area", "skipped", 0, "skipped: no key"))
+    assert evaluate_gate(rep, _prev(3), previous_source_counts={"jinju_city.tourinfo": 3, "tourapi.area": 0}).passed
+    assert evaluate_gate(rep, None, min_first_run=1, previous_source_counts={"tourapi.area": 9}).passed
+
+
+def test_gate_accepts_reused_source_records():
+    rep = _with_sources(_build(_healthy_places()), ("tourapi.area", "reused_previous", 199, "boom"))
+    g = evaluate_gate(rep, _prev(3), previous_source_counts={"tourapi.area": 199})
+    assert g.passed  # covered by the reuse streak instead

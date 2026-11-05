@@ -166,3 +166,126 @@ def test_cli_invalid_settings_exit_2(monkeypatch, capsys):
     monkeypatch.setattr(cli, "get_settings", lambda: Settings(_env_file=None, daily_quota="many"))
     assert main(["report", "--run-id", "x"]) == 2
     assert "설정 오류" in capsys.readouterr().err
+
+
+# ---- review fixes B: missing sources, per-source watermark, persisted reuse streak, offline rebuild ----
+
+NOW3 = datetime(2026, 11, 18, 3, 0, tzinfo=KST)
+
+
+def _state(settings) -> dict:
+    return json.loads(settings.output_db.with_name("refresh_state.json").read_text(encoding="utf-8"))
+
+
+def _blocking(host: str, recorded):
+    """Recorded fixtures, except that ``host`` answers 403 (non-retryable) - e.g. a runner IP block."""
+    def handler(request):
+        if request.url.host == host:
+            return httpx.Response(403, text="blocked")
+        return recorded(request)
+
+    return httpx.MockTransport(handler)
+
+
+def _keyed(settings):
+    return settings.model_copy(update={"data_go_kr_key": SecretStr("test-key")})
+
+
+def test_missing_key_after_a_tourapi_build_keeps_the_previous_db(tmp_settings, recorded_transport, capsys):
+    from conftest import _recorded_handler
+
+    keyed = _keyed(tmp_settings)
+    asyncio.run(run_pipeline(keyed, incremental=False, today=TODAY, now=NOW, transport=recorded_transport))
+    before_db = keyed.output_db.read_bytes()
+    before_report = keyed.output_report.read_bytes()
+    capsys.readouterr()
+
+    code = main(["run", "--incremental", "--today", "2026-11-11"], settings=tmp_settings,
+                transport=httpx.MockTransport(_recorded_handler()))
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "tourapi.area" in out and "skipped: no key" in out
+    assert keyed.output_db.read_bytes() == before_db
+    assert keyed.output_report.read_bytes() == before_report
+
+
+async def test_state_file_keeps_tourapi_watermark_until_tourapi_succeeds(tmp_settings, recorded_transport):
+    from conftest import _recorded_handler
+
+    keyed = _keyed(tmp_settings)
+    await run_pipeline(keyed, incremental=False, today=TODAY, now=NOW, transport=recorded_transport)
+    first = _state(keyed)
+    assert first["synced_at"]["tourapi.area"] == NOW.isoformat(timespec="seconds")
+    assert first["reused_streak"] == 0
+
+    def tour_down(request):
+        if request.url.host == "apis.data.go.kr":
+            return httpx.Response(200, json={"response": {"header": {"resultCode": "10", "resultMsg": "ERR"}}})
+        return _recorded_handler()(request)
+
+    report, gate = await run_pipeline(keyed, incremental=True, today=date(2026, 11, 11), now=NOW2,
+                                      transport=httpx.MockTransport(tour_down))
+    assert gate.passed, gate.failures
+    assert {s["source"]: s["status"] for s in report["sources"]}["tourapi.area"] == "reused_previous"
+    second = _state(keyed)
+    assert second["synced_at"]["tourapi.area"] == NOW.isoformat(timespec="seconds")  # not advanced
+    assert second["synced_at"]["jinju_city.tourinfo"] == NOW2.isoformat(timespec="seconds")
+    assert second["reused_streak"] == 1
+
+
+async def test_reuse_streak_survives_an_unchanged_content_hash(tmp_settings, recorded_transport):
+    """The workflow only commits places.db when content_hash changes; refresh_state.json is committed
+    on every run, so two blocked runs in a row fail the gate even though the data never changed."""
+    from conftest import _recorded_handler
+
+    await run_pipeline(tmp_settings, incremental=False, today=TODAY, now=NOW, transport=recorded_transport)
+    committed_db = tmp_settings.output_db.read_bytes()
+    committed_report = tmp_settings.output_report.read_bytes()
+    first_hash = json.loads(committed_report)["content_hash"]
+
+    blocked = _blocking("www.jinju.go.kr", _recorded_handler())
+    report, gate = await run_pipeline(tmp_settings, incremental=True, today=date(2026, 11, 11), now=NOW2,
+                                      transport=blocked)
+    assert gate.passed and report["reused_streak"] == 1
+    assert report["content_hash"] == first_hash  # nothing new: the workflow keeps the committed db
+    tmp_settings.output_db.write_bytes(committed_db)
+    tmp_settings.output_report.write_bytes(committed_report)
+    assert _state(tmp_settings)["reused_streak"] == 1
+
+    report, gate = await run_pipeline(tmp_settings, incremental=True, today=date(2026, 11, 18), now=NOW3,
+                                      transport=blocked)
+    assert report["reused_streak"] == 2
+    assert not gate.passed and any("2 runs in a row" in f for f in gate.failures)
+
+
+def test_from_raw_rebuilds_offline_with_same_content(tmp_settings, recorded_transport, capsys):
+    keyed = _keyed(tmp_settings)
+    asyncio.run(run_pipeline(keyed, incremental=False, today=TODAY, now=NOW, transport=recorded_transport))
+    before = json.loads(keyed.output_report.read_text(encoding="utf-8"))
+    ids = all_ids(keyed.output_db)
+    state = _state(keyed)
+
+    requests = []
+
+    def no_network(request):
+        requests.append(request)
+        raise AssertionError(f"network call in --from-raw: {request.url}")
+
+    # no key needed, and whatever transport is injected is never used
+    code = main(["run", "--from-raw", "--today", "2026-11-11"], settings=tmp_settings,
+                transport=httpx.MockTransport(no_network))
+    assert code == 0, capsys.readouterr()
+    after = json.loads(keyed.output_report.read_text(encoding="utf-8"))
+    assert requests == []
+    assert after["content_hash"] == before["content_hash"] and after["run_id"] != before["run_id"]
+    assert all_ids(keyed.output_db) == ids
+    assert {s["source"] for s in after["sources"]} == {s["source"] for s in before["sources"] if s["records"]}
+    assert all(s["calls"] == 0 and s["status"] == "ok" for s in after["sources"])
+    assert after["replayed_from"] == before["run_id"]
+    assert _state(keyed) == state  # an offline rebuild neither advances watermarks nor resets the streak
+
+
+def test_from_raw_without_previous_db_exits_2(tmp_settings, capsys):
+    assert main(["run", "--from-raw"], settings=tmp_settings) == 2
+    assert "--from-raw" in capsys.readouterr().err
+    assert not tmp_settings.output_db.exists()

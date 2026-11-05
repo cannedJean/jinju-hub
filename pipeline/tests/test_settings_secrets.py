@@ -31,9 +31,15 @@ def test_blank_env_file_line_is_none(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
-def test_default_sources_blank_key_excludes_tourapi(blank, caplog):
-    s = Settings(_env_file=None, data_go_kr_key=blank)
+async def test_blank_key_reports_tourapi_skipped(blank, ctx_factory, caplog):
+    import httpx
+
+    from jinju_pipeline.collect import collect_all
+
+    ctx = ctx_factory(httpx.MockTransport(lambda r: httpx.Response(500)), data_go_kr_key=blank)
+    tour = [x for x in default_sources(ctx.settings) if x.name.startswith("tourapi")]
+    assert [x.name for x in tour] == ["tourapi.area", "tourapi.festival"]
     with caplog.at_level(logging.WARNING):
-        names = [x.name for x in default_sources(s)]
-    assert not any(n.startswith("tourapi") for n in names)
+        results = await collect_all(tour, ctx)
+    assert all(r.status == "skipped" and r.error == "skipped: no key" for r in results)
     assert "DATA_GO_KR_KEY" in caplog.text

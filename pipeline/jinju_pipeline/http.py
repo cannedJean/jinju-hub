@@ -81,6 +81,14 @@ class QuotaLedger:
         if source is not None:
             self._by_source[source] = self._by_source.get(source, 0) + n
 
+    def record_unmetered(self, n: int = 1, source: str | None = None) -> None:
+        """Count calls per source without spending the key quota (sources that need no key)."""
+        if source is not None:
+            self._by_source[source] = self._by_source.get(source, 0) + n
+
+    def unmetered(self) -> "UnmeteredLedger":
+        return UnmeteredLedger(self)
+
     def used_today(self) -> int:
         return self._base + self._run
 
@@ -97,6 +105,16 @@ class QuotaLedger:
         self._path.write_text(json.dumps({self._today: self.used_today()}), encoding="utf-8")
 
 
+class UnmeteredLedger:
+    """``fetch_json`` ledger view that only counts calls per source (never raises QuotaExceeded)."""
+
+    def __init__(self, ledger: QuotaLedger):
+        self._ledger = ledger
+
+    def consume(self, n: int = 1, source: str | None = None) -> None:
+        self._ledger.record_unmetered(n, source)
+
+
 def _raise_for_non_json(text: str, status: int) -> None:
     if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in text or "<returnReasonCode>22<" in text:
         raise QuotaExceeded("upstream gateway quota exceeded")
@@ -111,7 +129,7 @@ async def fetch_json(
     params: dict,
     *,
     limiter: RateLimiter,
-    ledger: QuotaLedger | None = None,
+    ledger: QuotaLedger | UnmeteredLedger | None = None,
     source: str | None = None,
     max_attempts: int = 4,
     wait: tenacity.wait.wait_base | None = None,

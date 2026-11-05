@@ -70,3 +70,21 @@ async def test_empty_total_makes_single_call(ctx_factory):
 def test_unknown_kind_rejected():
     with pytest.raises(KeyError):
         JinjuCitySource("nope")
+
+
+async def test_city_pages_do_not_consume_tourapi_quota(ctx_factory):
+    """Spec 5.9: the key quota (daily/run cap) is TourAPI's; city pages are only counted per source."""
+    from datetime import date
+
+    from jinju_pipeline.http import QuotaLedger
+
+    def handler(request):
+        page = int(request.url.params["page"])
+        return httpx.Response(200, json={"record_count": 25, "results": [{"idx": page, "name": "n"}]})
+
+    ctx = ctx_factory(httpx.MockTransport(handler))
+    ctx.ledger = QuotaLedger(None, daily_limit=1, run_limit=1, today=date.today())
+    recs = await JinjuCitySource("heritage").collect(ctx)
+    assert len(recs) == 3
+    assert ctx.ledger.used_this_run() == 0 and ctx.ledger.used_today() == 0
+    assert ctx.ledger.used_by_source() == {"jinju_city.heritage": 3}

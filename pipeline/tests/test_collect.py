@@ -84,12 +84,46 @@ async def test_calls_come_from_ledger(ctx):
     assert res.calls == 2
 
 
-def test_default_sources_without_key_excludes_tourapi(caplog):
-    s = Settings(_env_file=None, data_go_kr_key=None)
+CITY_NAMES = [f"jinju_city.{k}" for k in ("tourinfo", "restaurant", "festival", "heritage", "lodging")]
+
+
+async def test_without_key_tourapi_sources_report_skipped(ctx_factory, previous_snapshot, caplog):
+    """A missing key must show up as a skipped source (never silently absent, never reused)."""
+    ctx = ctx_factory(httpx.MockTransport(lambda r: httpx.Response(500)), data_go_kr_key=None)
+    ctx.previous = previous_snapshot(raw_by_source={"tourapi.area": [rec("tourapi.area", "1")]})
+    sources = default_sources(ctx.settings)
+    assert [x.name for x in sources] == CITY_NAMES + ["tourapi.area", "tourapi.festival"]
     with caplog.at_level(logging.WARNING):
-        names = [x.name for x in default_sources(s)]
-    assert names == [f"jinju_city.{k}" for k in ("tourinfo", "restaurant", "festival", "heritage", "lodging")]
+        res = {r.source: r for r in await collect_all(sources[-2:], ctx)}
+    for name in ("tourapi.area", "tourapi.festival"):
+        assert res[name].status == "skipped" and res[name].records == []
+        assert res[name].error == "skipped: no key" and res[name].calls == 0
     assert any("DATA_GO_KR_KEY" in m for m in caplog.messages)
+
+
+async def test_quota_hit_on_tourapi_does_not_fail_city_sources(ctx_factory):
+    """City pages are not metered against the TourAPI key quota, so an exhausted run budget only
+    affects the TourAPI source that hit it."""
+    from jinju_pipeline.http import QuotaLedger
+    from jinju_pipeline.sources.jinju_city import JinjuCitySource
+    from jinju_pipeline.sources.tourapi import TourApiFestivalSource
+
+    def handler(request):
+        if request.url.host == "www.jinju.go.kr":
+            page = int(request.url.params["page"])
+            return httpx.Response(200, json={"record_count": 30, "results": [{"idx": page, "name": "n"}]})
+        return httpx.Response(200, json={"response": {"header": {"resultCode": "0000"},
+                                                      "body": {"items": "", "totalCount": 0}}})
+
+    from datetime import date
+
+    ctx = ctx_factory(httpx.MockTransport(handler), data_go_kr_key="k")
+    ctx.ledger = QuotaLedger(None, daily_limit=10**9, run_limit=0, today=date.today())
+    res = {r.source: r for r in await collect_all([JinjuCitySource("tourinfo"), TourApiFestivalSource()], ctx)}
+    assert res["jinju_city.tourinfo"].status == "ok" and len(res["jinju_city.tourinfo"].records) == 3
+    assert res["jinju_city.tourinfo"].calls == 3
+    assert res["tourapi.festival"].status == "failed" and "QuotaExceeded" in res["tourapi.festival"].error
+    assert ctx.ledger.used_this_run() == 0
 
 
 def test_default_sources_with_key_includes_tourapi():

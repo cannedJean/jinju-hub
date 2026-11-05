@@ -1,4 +1,4 @@
-"""CLI: ``python -m jinju_pipeline run|verify-codes|report``.
+"""CLI: ``python -m jinju_pipeline run [--incremental | --from-raw]|verify-codes|report``.
 
 Exit codes: 0 gate passed, 1 gate failed, 2 configuration error (ConfigError, locked places.db,
 missing report).
@@ -44,6 +44,8 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--today", type=date.fromisoformat, help="YYYY-MM-DD (default: today, KST)")
     run.add_argument("--out", type=Path, help="places.db path (report.json is written next to it)")
     run.add_argument("--until", choices=("clean", "merge"))
+    run.add_argument("--from-raw", action="store_true",
+                     help="no collection/network: replay the raw records stored in the previous places.db")
     sub.add_parser("verify-codes", help="check lDong codes and per-type counts via TourAPI")
     rep = sub.add_parser("report", help="print the report.md of a past run")
     rep.add_argument("--run-id", required=True)
@@ -72,6 +74,7 @@ def _cmd_run(args, settings: Settings, transport) -> int:
     today = args.today or now.date()
     report, gate = asyncio.run(run_pipeline(
         settings, incremental=args.incremental, today=today, now=now, transport=transport, until=args.until,
+        from_raw=args.from_raw,
     ))
     if args.until:
         print(json.dumps(report, ensure_ascii=False, indent=2))
