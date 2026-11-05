@@ -60,10 +60,13 @@ STOP_WORDS = {
     "끝났는데", "끝난", "끝났어", "언제", "언제야", "언제해", "해", "얼마", "얼마야", "어때", "어때요", "어떤",
     "어떨까", "가볼만해", "가볼만한", "가볼", "가볼까", "갈까", "갈래", "가기", "뭐", "뭐가", "뭐야", "무엇",
     "있을까", "있어요", "있는", "있니", "있나", "할만한", "할", "놀", "곳들", "데", "싶은", "주세요", "해줘",
+    "사진", "찍기", "찍을", "찍는", "기간", "때", "다른", "말고", "빼고", "제외", "제외하고",
     "실내", "실외",  # the indoor intent is a tag filter, not text
 }
 # A term directly followed by one of these words is a location (landmark/area), not the thing searched for.
 _LOCATION_MARKERS = ("근처", "주변", "부근", "옆", "가까운", "인근")
+# A term directly followed by one of these words is excluded ("비빔밥 말고"): rows naming it are dropped.
+_NEGATION_MARKERS = ("말고", "빼고", "제외")
 # Jinju's 읍/면 (a bare 면 suffix is not enough: 냉면, 볶음면 and 쫄면 are dishes); 동 names are matched by suffix.
 _ADMIN_AREAS = (
     "문산읍", "내동면", "정촌면", "금곡면", "진성면", "일반성면", "이반성면", "사봉면", "지수면", "대곡면",
@@ -96,16 +99,18 @@ MAX_TERM_CHARS = 30  # with MAX_TERMS, any query built from the terms stays unde
 _W_TITLE = 3.0  # title, menu and a matching tag are strong evidence
 _W_OVERVIEW = 1.0
 _W_EXACT_TITLE = 3.0  # extra when the whole (normalized) title is the term: the user named that place
-_W_LOCATION = 0.5  # a location term's text hits only nudge the ranking; the anchor distance does the rest
 _W_HINT = 0.5  # implied terms (실내 -> 박물관 ...) rank but never outweigh the user's own words
 _ANCHOR_CAP_M = 5000  # anchored ("X 근처") results farther than this are not "near"
 _TAGGED_CATEGORIES = ("sight", "culture", "leisure")  # the only categories the indoor tag describes
 # Extra spellings a term also matches.
-_TERM_SYNONYMS = {"카페": ("커피", "cafe", "coffee"), "야경": ("야간", "조명")}
+_TERM_SYNONYMS = {"카페": ("커피", "cafe", "coffee"), "야경": ("야간", "조명"), "산책로": ("산책", "둘레길")}
 # Terms that also match a curated tag (scored like a title hit).
 _TERM_TAGS = {"야경": "night_view", "야간": "night_view"}
 # Indoor intent without a target: rank the kinds of places that are indoors by definition.
 INDOOR_HINTS = ("박물관", "전시", "미술관", "과학관", "기념관", "체험관")
+# Travelling with children: the words are the intent, the hints rank family-friendly places.
+KID_WORDS = {"아이", "아이들", "애들", "어린이", "아기", "키즈"}
+KID_HINTS = ("어린이", "체험", "박물관", "공원", "놀이")
 
 INDOOR_WORDS = ("실내", "비가", "비 오", "비오", "우천")
 WEATHER_WORDS = ("날씨", "기온", "실내", "실외", "야외", "비가", "비 오", "비오", "우산", "더워", "추워")
@@ -121,10 +126,6 @@ SYSTEM_PROMPT = """당신은 진주 여행 도우미입니다. 아래 [컨텍스
 
 _MARKER = re.compile(r"\[(place|post):\s*([^\]\s]+)\s*\]")
 _MARKER_WITH_SPACE = re.compile(r"[ \t]*\[(?:place|post):[^\]]*\]")
-
-
-class ChatUpstreamError(RuntimeError):
-    """Claude cannot be called (no key configured); answer_chat turns it into the fallback answer."""
 
 
 class _DailyBudget:
@@ -204,14 +205,20 @@ def _clean(text: str | None, limit: int | None = None) -> str:
     return s
 
 
+_MARKED_WORD = re.compile(r"[가-힣A-Za-z0-9]+\s*(?:" + "|".join(_LOCATION_MARKERS) + ")")
+
+
 def _detect_categories(message: str) -> list[str]:
-    return list(dict.fromkeys(code for kw, code in TYPE_KEYWORDS.items() if kw in message))
+    """Category intents, ignoring a keyword used as a location ("숙소 근처 맛집" asks for food)."""
+    text = _MARKED_WORD.sub(" ", message)
+    return list(dict.fromkeys(code for kw, code in TYPE_KEYWORDS.items() if kw in text))
 
 
 class _Term(NamedTuple):
     text: str
     marked: bool = False  # directly followed by a location marker (근처, 주변, ...)
     shop: bool = False  # a 집/가게/식당 suffix was stripped (냉면집 -> 냉면)
+    excluded: bool = False  # directly followed by 말고/빼고/제외 ("비빔밥 말고")
 
 
 def _normalize_token(tok: str) -> tuple[str, bool] | None:
@@ -250,7 +257,8 @@ def _analyze_terms(message: str) -> list[_Term]:
         nxt = toks[idx + 1] if idx + 1 < len(toks) else ""
         old = found.get(term)
         found[term] = _Term(term, bool(old and old.marked) or nxt.startswith(_LOCATION_MARKERS),
-                            bool(old and old.shop) or shop)
+                            bool(old and old.shop) or shop,
+                            bool(old and old.excluded) or nxt.startswith(_NEGATION_MARKERS))
     return list(found.values())
 
 
@@ -278,16 +286,30 @@ def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> Plac
     """The sight/culture place named `term` (exact name first, then jinju8, then shortest title).
 
     strict (term not marked as a location): only a jinju8 place or an exact title counts, so that a type word
-    such as 카페 never resolves to a sight that merely has it in its name."""
+    such as 카페 never resolves to a sight that merely has it in its name. Several rows with exactly that name
+    (the data has two 진양호 rows 4 km apart) resolve to the one nearest the jinju8 place naming the term, else
+    to the one nearest the centroid of every sight/culture row with the term in its title."""
     if term in _GENERIC_PLACES:
         return None
-    named = [p for p in repo.chat_rows()
-             if p.category in ("sight", "culture") and term in p.title_l and p.lat is not None and p.lng is not None
-             and (not strict or p.jinju8_rank is not None or _norm_title(p.title_l) == term)]
+    titled = [p for p in repo.chat_rows()
+              if p.category in ("sight", "culture") and term in p.title_l and p.lat is not None and p.lng is not None]
+    named = [p for p in titled if not strict or p.jinju8_rank is not None or _norm_title(p.title_l) == term]
     if not named:
         return None
-    return min(named, key=lambda p: (_norm_title(p.title_l) != term, p.jinju8_rank is None, p.jinju8_rank or 0,
-                                     len(p.title), p.id))
+    exact = [p for p in named if _norm_title(p.title_l) == term]
+    if not exact:
+        return min(named, key=lambda p: (p.jinju8_rank is None, p.jinju8_rank or 0, len(p.title), p.id))
+    ref_lat, ref_lng = _reference_point(titled)
+    return min(exact, key=lambda p: (round(_haversine_m(ref_lat, ref_lng, p.lat, p.lng), -2),
+                                     -len(p.overview_l), p.id))
+
+
+def _reference_point(titled: list[PlaceText]) -> tuple[float, float]:
+    jinju8 = [p for p in titled if p.jinju8_rank is not None]
+    if jinju8:
+        best = min(jinju8, key=lambda p: p.jinju8_rank)
+        return best.lat, best.lng  # type: ignore[return-value]
+    return (sum(p.lat for p in titled) / len(titled), sum(p.lng for p in titled) / len(titled))  # type: ignore[misc]
 
 
 def _in_title(title_l: str, word: str) -> bool:
@@ -315,7 +337,9 @@ def _in_scope(row: PlaceText, categories: list[str], tags: list[str]) -> bool:
 
 
 def _collection_order(rows: list[PlaceText]) -> list[PlaceText]:
-    return sorted(rows, key=lambda p: (p.jinju8_rank is None, p.jinju8_rank or 0, not p.is_collection, p.title))
+    # Rows with a description first: "(주)…" registry rows without one tell the user nothing.
+    return sorted(rows, key=lambda p: (p.jinju8_rank is None, p.jinju8_rank or 0, not p.is_collection,
+                                       not p.overview_l, p.title))
 
 
 class _Ranked(NamedTuple):
@@ -325,23 +349,31 @@ class _Ranked(NamedTuple):
 
 
 def _rank_places(
-    repo: PlacesRepo, categories: list[str], terms: list[_Term], tags: list[str], specific_only: bool = False
+    repo: PlacesRepo, categories: list[str], terms: list[_Term], tags: list[str], specific_only: bool = False,
+    hints: tuple[str, ...] = (), anchor: PlaceText | None = None,
 ) -> _Ranked:
     """Places for the question.
 
     Scored ranker: the candidates are the union of every term's hits within the category (and tag) scope;
-    each scores sum(idf(term) x field weight). Dish/type/shop terms are a hard filter when they hit anything.
-    Location terms (marked 근처.., 동/읍/면 names, a landmark next to a dish or category intent) nudge the score
-    by text and set the distance anchor; anchored results stay within _ANCHOR_CAP_M and distance only breaks
-    ties. `specific_only` (festival questions): keep only title/menu hits and never fall back to a generic list.
+    each scores sum(idf(term) x field weight) x the share of the (matching) target terms it hits, so a row
+    hitting one stray word never outranks one hitting all of them. Dish/type/shop terms are a hard filter
+    when they hit anything; excluded terms ("비빔밥 말고") drop the rows naming them. Location terms
+    (marked 근처.., 동/읍/면 names, a landmark next to a dish or category intent) set the distance anchor;
+    anchored results stay within _ANCHOR_CAP_M, rank on the target terms only and distance breaks ties.
+    `hints` (implied by the question: 실내, 아이랑) rank softly when there is no target and no category.
+    `anchor` (a festival venue) is used as given. `specific_only` (festival questions): keep only title/menu
+    hits and never fall back to a generic list.
     """
     asked_categories = categories
-    if tags and not categories:
+    hints = () if asked_categories else tuple(hints)
+    if (tags or hints) and not categories:
         categories = list(_TAGGED_CATEGORIES)
-    scope = [r for r in repo.chat_rows() if _in_scope(r, categories, tags)]
+    excluded = [t.text for t in terms if t.excluded]
+    terms = [t for t in terms if not t.excluded]
+    scope = [r for r in repo.chat_rows() if _in_scope(r, categories, tags)
+             and not any(_in_title(r.title_l, x) or x in r.menu_l for x in excluded)]
 
     has_focus = bool(asked_categories) or any(_is_dish_word(t.text) or t.shop for t in terms)
-    anchor: PlaceText | None = None
     locations: list[_Term] = []
     targets: list[_Term] = []
     for t in terms:  # explicit locations first, so an unmarked word cannot steal the anchor
@@ -363,12 +395,13 @@ def _rank_places(
         targets.append(t)
 
     target_terms = [t.text for t in targets]
-    location_terms = [t.text for t in locations if t.text not in _HOME_WORDS]
+    # With an anchor, distance handles proximity: the location words' text hits do not score.
+    location_terms = [] if anchor is not None else [t.text for t in locations if t.text not in _HOME_WORDS]
     focus = [t.text for t in targets if _is_dish_word(t.text) or t.shop]
-    hints = [] if (targets or specific_only or not tags or asked_categories) else list(INDOOR_HINTS)
-    loc_weight = _W_LOCATION if anchor else 1.0
+    if targets or specific_only:
+        hints = ()
     weighted = ([(t, 1.0) for t in target_terms] + [(h, _W_HINT) for h in hints]
-                + [(t, loc_weight) for t in location_terms])
+                + [(t, 1.0) for t in location_terms])
     hits: dict[str, dict[str, float]] = {}
     for term, _ in weighted:
         area = _has_location_shape(term)
@@ -386,26 +419,32 @@ def _rank_places(
     def union(words, strong=False) -> set[str]:
         return {i for w in words for i, wt in hits[w].items() if not strong or wt >= _W_TITLE} & near
 
+    named_anchor = False
     pool = union(focus, specific_only)
     if not pool:
         if target_terms or hints:
-            pool = union(target_terms + hints, specific_only)
+            pool = union(target_terms + list(hints), specific_only)
         elif not specific_only:
             pool = set(near) if anchor is not None else union(location_terms)
-        if anchor is not None and anchor.id in near and not (focus or specific_only):
+        if anchor is not None and anchor.id in near and target_terms and not (focus or specific_only):
             pool.add(anchor.id)  # the user named this place: it stays a result ("국립진주박물관 휴관일")
+            named_anchor = True
 
     by_id = {r.id: r for r in scope}
     if pool:
         idf = {term: math.log(1 + len(scope) / len(h)) if h else 0.0 for term, h in hits.items()}
+        live_targets = [t for t in target_terms if hits[t]]
 
         def score(pid: str) -> float:
-            return sum(mult * idf[term] * hits[term].get(pid, 0.0) for term, mult in weighted)
+            raw = sum(mult * idf[term] * hits[term].get(pid, 0.0) for term, mult in weighted)
+            if len(live_targets) < 2:
+                return raw
+            return raw * sum(pid in hits[t] for t in live_targets) / len(live_targets)
 
         def key(pid: str):
             p = by_id[pid]
-            return (-round(score(pid), 2), dist.get(pid, 0.0), p.jinju8_rank is None, p.jinju8_rank or 0,
-                    not p.is_collection, p.title)
+            return (pid != anchor.id if named_anchor else False, -round(score(pid), 2), dist.get(pid, 0.0),
+                    p.jinju8_rank is None, p.jinju8_rank or 0, not p.is_collection, not p.overview_l, p.title)
 
         ranked = sorted(pool, key=key)[:MAX_PLACES]
         places = [replace(by_id[i], distance_m=round(dist[i]) if i in dist else None) for i in ranked]
@@ -435,12 +474,22 @@ def _named_festivals(repo: PlacesRepo, terms: list[_Term], fest_rows: dict[str, 
     (also part of a festival title) stays a place term."""
     out: dict[str, list[dict]] = {}
     for t in terms:
-        if t.marked or t.text in _GENERIC_PLACES:
+        if t.excluded or t.text in _GENERIC_PLACES:
             continue
         rows = [r for r in fest_rows.values() if t.text in (r["title"] or "").lower()]
         if rows and _resolve_landmark(repo, t.text, strict=True) is None:
             out[t.text] = rows
     return out
+
+
+def _festival_venue(repo: PlacesRepo, fest: dict) -> PlaceText | None:
+    """The festival's first venue place with coordinates (venue_place_ids), else None."""
+    by_id = {r.id: r for r in repo.chat_rows()}
+    for vid in fest.get("venue_place_ids") or []:
+        v = by_id.get(vid)
+        if v is not None and v.lat is not None and v.lng is not None:
+            return v
+    return None
 
 
 def _format_distance(meters: int) -> str:
@@ -474,16 +523,29 @@ def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retri
     analyzed = _analyze_terms(message)
     terms = [t.text for t in analyzed]
     tags = ["indoor"] if any(w in message for w in INDOOR_WORDS) else []
+    kids = any(t.text in KID_WORDS for t in analyzed)
+    hints = KID_HINTS if kids else INDOOR_HINTS if tags else ()
     fest_rows = {r["id"]: r for r in repo.festival_rows()}
     named = _named_festivals(repo, analyzed, fest_rows)
     want_festival = "festival" in cats or bool(named)
-    search_terms = [t for t in analyzed if t.text not in named]
+    search_terms = [t for t in analyzed if t.text not in named and t.text not in KID_WORDS]
     search_cats = [c for c in cats if c != "festival"]
+    # "유등축제 근처 맛집" / "유등축제 맛집": a named festival next to a location marker or a category intent
+    # anchors on its venue.
+    venue = None
+    for t in analyzed:
+        if t.text in named and (t.marked or search_cats):
+            venue = next((v for r in named[t.text] if (v := _festival_venue(repo, r)) is not None), None)
+            if venue is not None:
+                break
     out = Retrieval(today=today)
 
-    # A festival question searches places only for what else it names specifically (never a generic list).
+    # A festival question searches places only for a category it asks for or what else it names specifically
+    # (never a generic list).
     if not want_festival or search_terms or search_cats:
-        places, anchor, matched = _rank_places(repo, search_cats, search_terms, tags, specific_only=want_festival)
+        places, anchor, matched = _rank_places(repo, search_cats, search_terms, tags,
+                                               specific_only=want_festival and not search_cats,
+                                               hints=hints, anchor=venue)
         anchor_name = _clean(anchor.title).split("(")[0].strip() if anchor is not None else ""
         if anchor is not None and not matched and not want_festival:
             out.place_note = f"{anchor_name} {_ANCHOR_CAP_M // 1000}km 안에서 질문과 일치하는 곳을 찾지 못함" + (
@@ -575,7 +637,7 @@ def _build_client(api_key: str, timeout: float) -> AsyncAnthropic:
 def get_anthropic_client(settings: Settings) -> AsyncAnthropic:
     """Cached per (key, timeout); the key comes from the app's Settings, never from import-time config."""
     if settings.anthropic_api_key is None:
-        raise ChatUpstreamError("ANTHROPIC_API_KEY is not configured")
+        raise RuntimeError("ANTHROPIC_API_KEY is not configured")
     return _build_client(settings.anthropic_api_key.get_secret_value(), settings.anthropic_timeout_seconds)
 
 
@@ -639,8 +701,11 @@ async def answer_chat(
     except anthropic.APIStatusError as exc:  # 401/400 key or credit problems, RateLimitError, 5xx
         logger.warning("chat upstream status error: %s status=%s", type(exc).__name__, exc.status_code)
         return fallback
-    except (anthropic.APIError, ChatUpstreamError) as exc:  # connection errors and timeouts included
+    except anthropic.APIError as exc:  # connection errors and timeouts included
         logger.warning("chat upstream error: %s", type(exc).__name__)
+        return fallback
+    except Exception as exc:  # noqa: BLE001 - last resort: the chat answers with the fallback, never a 500
+        logger.error("chat unexpected error calling Claude: %s", type(exc).__name__)  # type only, never the key
         return fallback
 
     if response.stop_reason == "refusal":

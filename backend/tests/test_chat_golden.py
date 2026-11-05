@@ -174,19 +174,93 @@ def _nonempty(ret, places, rows):
     return bool(places), ""
 
 
-def _near_jinyangho(max_m):
-    # No 국밥 place (and no food place at all) lies within 5 km of 진양호 in the real data: the context must not
-    # present the 6.7-12 km ones as "near"; any place it lists is within the cap and labelled with its distance,
-    # and it says that nothing matched.
+JINYANGHO = "jh-94e71d068d"  # 진양호 (lake centre; a second row titled 진양호, jh-0d5956629a, is a 4.2 km outlier)
+LABEL = re.compile(r"약 [\d.,]+ ?(m|km)")
+
+
+def _place_lines(ret):
+    return {i.id: i.line for i in ret.items if i.group == "place"}
+
+
+def _near_jinyangho_gukbap(ret, places, rows):
+    lines = _place_lines(ret)
+    lake = rows[JINYANGHO]
+    hayeon = [p for p in places if "하연옥" in p["title"]]
+    if not hayeon:
+        return False, "하연옥 missing"
+    far = [p["title"] for p in places if _dist(lake, p) > 5000]
+    bad = [p["title"] for p in hayeon if not LABEL.search(lines[p["id"]])]
+    return not far and not bad, f"far={far} unlabelled={bad}"
+
+
+def _near_jinyangho_food(ret, places, rows):
+    lines = _place_lines(ret)
+    lake = rows[JINYANGHO]
+    food = [p for p in places if p["category"] == "food"]
+    far = [p["title"] for p in places if _dist(lake, p) > 5000]
+    unlabelled = [p["title"] for p in places if not LABEL.search(lines[p["id"]])]
+    ok = len(food) >= 4 and len(food) == len(places) and not far and not unlabelled
+    return ok, f"{len(food)} food, far={far} unlabelled={unlabelled}"
+
+
+def _lantern_festival_food(ret, places, rows):
+    import json
+    line = next((i.line for i in ret.items if i.id == LANTERN_FESTIVAL), None)
+    if line is None or "종료" not in line and "진행" not in line and "예정" not in line:
+        return False, "진주남강유등축제 row with status missing"
+    venues = [rows[v] for v in json.loads(rows[LANTERN_FESTIVAL]["venue_place_ids"])]
+    near = [p for p in places if p["category"] == "food" and min(_dist(v, p) for v in venues) <= 2000]
+    return len(near) >= 3, f"{len(near)} food places within 2 km of a venue"
+
+
+def _min_category(cat, n):
     def check(ret, places, rows):
-        lines = [i.line for i in ret.items if i.group == "place"]
-        anchor = next(r for r in rows.values() if r["title"] == "진양호" and r["lat"] is not None)
-        far = [p["title"] for p in places if _dist(anchor, p) > max_m]
-        unlabelled = [ln[:40] for ln in lines if not re.search(r"약 [\d.,]+ ?(m|km)", ln)]
-        noted = "찾지 못" in ret.context()
-        ok = not far and not unlabelled and noted and all(p["category"] == "food" for p in places)
-        return ok, f"far={far} unlabelled={unlabelled} noted={noted}"
+        got = sum(p["category"] == cat for p in places)
+        return got >= n, f"{got} {cat}"
     return check
+
+
+def _chokseokru_night_photo(ret, places, rows):
+    bad = [p["title"] for p in places if "묘" in p["title"] or "진사" in p["title"]]
+    night = [p for p in places if "night_view" in (p["tags"] or "") or re.search("야경|야간|조명", _text(p, "title", "overview"))]
+    return not bad and len(night) >= 2, f"bad={bad} night={len(night)}"
+
+
+KID = re.compile("어린이|체험|박물관|공원|놀이")
+
+
+def _with_kids(ret, places, rows):
+    top_bad = [p["title"] for p in places[:3] if p["category"] in ("food", "shopping")]
+    kid = [p for p in places if KID.search(_text(p, "title", "overview"))]
+    return not top_bad and len(kid) >= 2, f"top3 food/shopping={top_bad} kid={len(kid)}"
+
+
+def _not_bibimbap(ret, places, rows):
+    bib = [p["title"] for p in places if "비빔밥" in _text(p, "title", "menu")]
+    ok = bool(places) and len(bib) <= 1 and all(p["category"] == "food" for p in places)
+    return ok, f"비빔밥={bib}"
+
+
+def _no_corp_prefix_top3(ret, places, rows):
+    bad = [p["title"] for p in places[:3] if p["title"].startswith(("(유)", "(주)"))]
+    return bool(places) and not bad, f"prefixed={bad}"
+
+
+def _namgang_walk(ret, places, rows):
+    def walkish(p):
+        t = _text(p, "title", "overview")
+        riverside = "남강" in t or "남강" in (p["addr"] or "") or re.search("강변|둔치", t)
+        return bool(re.search("산책|길|공원|둘레", t)) and bool(riverside)
+    good = [p for p in places if walkish(p)]
+    hotels = [p["title"] for p in places[:3] if p["category"] == "stay" or "호텔" in p["title"]]
+    return len(good) >= 3 and not hotels, f"{len(good)}/{len(places)} walk+남강, top3 hotels={hotels}"
+
+
+def _castle_food_close(ret, places, rows):
+    castle = rows[CASTLE]
+    top = places[:3]
+    far = [(p["title"], round(_dist(castle, p))) for p in top if _dist(castle, p) > 1000]
+    return len(top) == 3 and not far, f"far={far}"
 
 
 def _no_crash(ret, places, rows):
@@ -219,7 +293,17 @@ CASES = [
     ("C16", "개천예술제 언제 해?", _includes(GAECHEON)),
     ("C17", "비 오는 날 냉면 맛집", _all_match("냉면", category="food")),
     ("C17", "비 오는 날 숙소 추천", _all_category("stay")),
-    ("M0", "진양호 근처 국밥", _near_jinyangho(5000)),
+    ("M0", "진양호 근처 국밥", _near_jinyangho_gukbap),
+    # fix round 1 (controller-defined rows)
+    ("R1", "진양호 근처 맛집", _near_jinyangho_food),
+    ("R1", "유등축제 근처 맛집", _lantern_festival_food),
+    ("R1", "축제 기간 숙소 추천", _min_category("stay", 3)),
+    ("R1", "촉석루 야경 사진 찍기 좋은 곳", _chokseokru_night_photo),
+    ("R1", "아이랑 갈만한 곳", _with_kids),
+    ("R1", "비빔밥 말고 다른 진주 음식", _not_bibimbap),
+    ("R1", "숙소 근처 맛집", _no_corp_prefix_top3),
+    ("R1", "남강 산책로", _namgang_walk),
+    ("R1", "진주성 맛집", _castle_food_close),
     ("C5", "진주 " * 200 + "냉면 국밥 비빔밥 카페 숙소 축제 야경 박물관", _no_crash),
 ]
 

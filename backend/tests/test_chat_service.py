@@ -277,9 +277,20 @@ def test_daily_limit_setting_from_env(monkeypatch):
     assert Settings(_env_file=None).chat_daily_limit == 200
 
 
+def _frontend_chat_timeout_seconds() -> float:
+    import re
+
+    src = Path(__file__).resolve().parents[2] / "frontend" / "src" / "api" / "chat.js"
+    if not src.is_file():
+        pytest.skip("frontend sources not present")
+    m = re.search(r"timeout:\s*([\d_]+)", src.read_text(encoding="utf-8"))
+    assert m, "postChat must set an explicit timeout"
+    return int(m.group(1).replace("_", "")) / 1000
+
+
 def test_claude_budget_fits_inside_frontend_timeout():
-    # M1/M13: retrieval + the weather wait + the Claude call must finish before the browser's 30 s chat timeout.
-    frontend_chat_timeout = 30.0
+    # M1/M13: retrieval + the weather wait + the Claude call must finish before the browser's chat timeout.
+    frontend_chat_timeout = _frontend_chat_timeout_seconds()
     s = _settings()
     assert s.anthropic_timeout_seconds + chat_service.WEATHER_TIMEOUT_SECONDS + 5 <= frontend_chat_timeout
     assert s.anthropic_max_tokens <= 1024
@@ -630,3 +641,113 @@ def test_anchored_lines_carry_distance(real_like_repo, db):
     lines = [i.line for i in ret.items if i.group == "place"]
     assert lines and all("진주성에서 약 " in ln for ln in lines)
     assert all(ln.count(" | ") == 3 for ln in lines)
+
+
+def test_unexpected_client_error_returns_flagged_fallback(repo, db, monkeypatch, caplog):
+    # Last resort: any other exception from the Claude call answers with the fallback, logging its type only.
+    _patch(monkeypatch, FakeClient(exc=ValueError("boom sk-ant-secret")))
+    with caplog.at_level(logging.WARNING, logger="jinjuhub.chat"):
+        res = _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED))
+    assert res.fallback is True and res.answer
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "ValueError" in logged and "sk-ant" not in logged and "boom" not in logged
+
+
+def test_upstream_error_class_removed():
+    assert not hasattr(chat_service, "ChatUpstreamError")
+
+
+def test_negated_term_is_excluded():
+    by = {t.text: t for t in chat_service._analyze_terms("비빔밥 말고 다른 냉면")}
+    assert by["비빔밥"].excluded and not by["냉면"].excluded
+    assert "말고" not in by and "다른" not in by
+
+
+def test_category_word_used_as_location_is_not_an_intent():
+    assert chat_service._detect_categories("숙소 근처 맛집") == ["food"]
+    assert chat_service._detect_categories("진주성 근처 냉면집") == ["food"]
+    assert chat_service._detect_categories("숙소 추천") == ["stay"]
+
+
+def test_photo_and_kid_words_are_not_text_terms():
+    assert chat_service._search_terms("촉석루 야경 사진 찍기 좋은 곳") == ["촉석루", "야경"]
+    assert chat_service._analyze_terms("아이랑 갈만한 곳")[0].text in chat_service.KID_WORDS
+
+
+def _extra_rows_repo(tmp_path, rows):
+    import shutil
+    import sqlite3
+
+    path = tmp_path / "extra.db"
+    shutil.copy(FIXTURE_DB, path)
+    con = sqlite3.connect(path)
+    con.execute("DELETE FROM places")
+    con.executemany(
+        f"INSERT INTO places ({','.join(_COLS)}, title_norm) VALUES ({','.join('?' * len(_COLS))}, '')", rows)
+    con.execute("INSERT INTO places_fts(places_fts) VALUES('rebuild')")
+    con.commit()
+    con.close()
+    return PlacesRepo(path)
+
+
+def test_duplicate_exact_landmark_resolves_near_its_jinju8_row(tmp_path):
+    # Two rows titled exactly 호수 (one a 4 km outlier with the smaller id): the one near the jinju8 row wins.
+    rows = [
+        ("a-outlier", "sight", "호수", "호수", "x", 35.18, 127.99, None, None),
+        ("z-centre", "sight", "호수", "호수", "x", 35.17, 128.03, None, None),
+        ("j-8", "sight", "제8경 호수 노을", "노을", "x", 35.171, 128.031, None, 8),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        assert chat_service._resolve_landmark(r, "호수").id == "z-centre"
+        assert chat_service._resolve_landmark(r, "호수", strict=True).id == "z-centre"
+    finally:
+        r.close()
+
+
+def test_duplicate_exact_landmark_without_jinju8_uses_centroid(tmp_path):
+    rows = [
+        ("a-outlier", "sight", "서원", "서원", "x", 35.30, 127.80, None, None),
+        ("m-main", "culture", "진주 서원(書院)", "서원", "x", 35.20, 128.00, None, None),
+        ("n-gate", "sight", "서원 정문", "문", "x", 35.201, 128.001, None, None),
+        ("n-wall", "sight", "서원 담장", "담", "x", 35.199, 127.999, None, None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        assert chat_service._resolve_landmark(r, "서원").id == "m-main"
+    finally:
+        r.close()
+
+
+def test_anchored_ranking_ignores_location_text_hits(tmp_path):
+    # "진주성 맛집": a row 3 km away that mentions 진주성 must not outrank one 100 m away (distance does proximity).
+    rows = [
+        ("s-castle", "sight", "진주성", "성곽", "x", _LM_LAT, _LM_LNG, None, 2),
+        ("f-far", "food", "먼식당", "진주성이 보이는 식당", "x", _LM_LAT + 0.027, _LM_LNG, "백반", None),
+        ("f-near", "food", "가까운식당", "한식", "x", _LM_LAT + 0.0009, _LM_LNG, "백반", None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, ["food"], chat_service._analyze_terms("진주성 맛집"), [])
+        assert [p.id for p in found] == ["f-near", "f-far"]
+    finally:
+        r.close()
+
+
+def test_coordination_prefers_rows_hitting_every_target(tmp_path):
+    # A row hitting one rare word in its title must not outrank a row hitting both words of the question.
+    rows = [
+        ("t-junk", "culture", "야경 묘", "묘소", "x", 35.1, 128.1, None, None),
+        ("t-both", "sight", "촉석루 누각", "야경이 아름답다", "x", 35.1, 128.1, None, None),
+        ("t-one", "sight", "촉석루 앞 광장", "광장", "x", 35.1, 128.1, None, None),
+        ("t-one2", "sight", "촉석루 표지석", "돌", "x", 35.1, 128.1, None, None),
+        ("t-one3", "sight", "촉석루 쉼터", "쉼터", "x", 35.1, 128.1, None, None),
+        ("t-none", "sight", "다른 곳", "없음", "x", 35.1, 128.1, None, None),
+    ]
+    r = _extra_rows_repo(tmp_path, rows)
+    try:
+        found = chat_service._search_places(r, [], chat_service._analyze_terms("촉석루 야경"), [])
+        ids = [p.id for p in found]
+        assert ids[0] == "t-both" and ids.index("t-junk") > 0
+    finally:
+        r.close()
