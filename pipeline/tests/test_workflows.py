@@ -30,6 +30,7 @@ def test_reachability_token_is_read_only():
 # ---- data-refresh "Commit changed data": run the real step script against a scratch git repo ----
 
 DATA = "backend/app/data"
+STATE = "pipeline/state/refresh_state.json"
 
 
 def _commit_script() -> str:
@@ -65,7 +66,8 @@ def repo(tmp_path):
     (work / DATA).mkdir(parents=True)
     (work / DATA / "places.db").write_bytes(b"db-v1")
     (work / DATA / "report.json").write_text('{"content_hash": "h1"}', encoding="utf-8")
-    (work / DATA / "refresh_state.json").write_text('{"reused_streak": 0}', encoding="utf-8")
+    (work / STATE).parent.mkdir(parents=True)
+    (work / STATE).write_text('{"reused_streak": 0}', encoding="utf-8")
     _git(work, "add", ".")
     _git(work, "commit", "-m", "init")
     _git(work, "push", "origin", "main")
@@ -80,14 +82,15 @@ def _run_step(work: Path) -> subprocess.CompletedProcess:
 
 def _remote_files(work: Path) -> dict[str, str]:
     _git(work, "fetch", "origin")
-    return {name: _git(work, "show", f"origin/main:{DATA}/{name}")
-            for name in ("places.db", "report.json", "refresh_state.json")}
+    files = {name: _git(work, "show", f"origin/main:{DATA}/{name}") for name in ("places.db", "report.json")}
+    files["refresh_state.json"] = _git(work, "show", f"origin/main:{STATE}")
+    return files
 
 
 def test_unchanged_hash_still_commits_refresh_state(repo):
     (repo / DATA / "places.db").write_bytes(b"db-v1-new-meta")  # same content, new meta/timestamps
     (repo / DATA / "report.json").write_text('{"content_hash": "h1", "run_id": "r2"}', encoding="utf-8")
-    (repo / DATA / "refresh_state.json").write_text('{"reused_streak": 1}', encoding="utf-8")
+    (repo / STATE).write_text('{"reused_streak": 1}', encoding="utf-8")
     res = _run_step(repo)
     assert res.returncode == 0, res.stdout + res.stderr
     files = _remote_files(repo)
@@ -107,12 +110,19 @@ def test_nothing_changed_makes_no_commit(repo):
 def test_changed_hash_commits_db_report_and_state(repo):
     (repo / DATA / "places.db").write_bytes(b"db-v2")
     (repo / DATA / "report.json").write_text('{"content_hash": "h2"}', encoding="utf-8")
-    (repo / DATA / "refresh_state.json").write_text('{"reused_streak": 0, "x": 1}', encoding="utf-8")
+    (repo / STATE).write_text('{"reused_streak": 0, "x": 1}', encoding="utf-8")
     res = _run_step(repo)
     assert res.returncode == 0, res.stdout + res.stderr
     files = _remote_files(repo)
     assert files == {"places.db": "db-v2", "report.json": '{"content_hash": "h2"}',
                      "refresh_state.json": '{"reused_streak": 0, "x": 1}'}
+
+
+def test_refresh_state_path_matches_pipeline_default():
+    from jinju_pipeline.settings import REPO_ROOT, Settings
+
+    assert Settings(_env_file=None).state_file == REPO_ROOT / STATE
+    assert STATE in _commit_script()
 
 
 def test_refresh_step_does_not_touch_secrets_handling():

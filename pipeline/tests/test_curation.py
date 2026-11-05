@@ -130,9 +130,6 @@ def test_operational_jinju8_fallbacks_and_venues_are_clean(repo_root):
 
 # ---- operational tags.yaml: indoor only for museum-type rows (review finding C18) ----
 
-NOT_INDOOR_WORDS = ("묘", "비석", "석탑", "봉수대", "고분", "화석산지")
-
-
 def _p(i, title, category, **kw):
     from jinju_pipeline.merge import normalize_name
     from jinju_pipeline.models import Place
@@ -184,10 +181,94 @@ def test_operational_tags_exhibition_keyword_does_not_hit_place_names(repo_root)
     assert "indoor" not in p.tags and "outdoor" in p.tags
 
 
-def test_operational_tags_never_mark_outdoor_heritage_indoor(repo_root):
-    """Contract: even a museum-type word in the title cannot make a tomb/stele/pagoda/fossil site indoor."""
-    titles = ["OO박물관 앞 석탑", "OO기념관 묘역", "화석산지 전시관 터", "OO 고분 전시", "봉수대 기념관 비석"]
-    places = [_p(i, t, "culture") for i, t in enumerate(titles)]
-    for p in apply_curation(places, _operational_tags(repo_root)).places:
-        if any(w in p.title for w in NOT_INDOOR_WORDS):
-            assert "indoor" not in p.tags, p.title
+def _src(source, raw):
+    from datetime import datetime
+
+    from jinju_pipeline.models import CleanRecord
+
+    return CleanRecord(source=source, source_id="1", category="sight", title="t", geo_status="ok", raw=raw,
+                       fetched_at=datetime(2026, 11, 4))
+
+
+@pytest.mark.parametrize("source, raw", [
+    ("jinju_city.tourinfo", {"category": "극장"}),
+    ("jinju_city.tourinfo", {"category": "박물관"}),
+    ("jinju_city.tourinfo", {"category": "공연장"}),
+    ("tourapi.area", {"list": {"contenttypeid": "14"}}),
+])
+def test_operational_source_category_marks_indoor_and_drops_outdoor(repo_root, source, raw):
+    p = apply_curation([_p(1, "어떤 시설", "sight", sources=[_src(source, raw)])], _operational_tags(repo_root)).places[0]
+    assert "indoor" in p.tags and "outdoor" not in p.tags  # M2: never both
+
+
+@pytest.mark.parametrize("source, raw", [
+    ("jinju_city.tourinfo", {"category": "일반명소"}),
+    ("tourapi.area", {"list": {"contenttypeid": "12"}}),
+    ("jinju_city.heritage", {"category": "박물관"}),  # rule is per source
+])
+def test_operational_source_category_other_values_stay_outdoor(repo_root, source, raw):
+    p = apply_curation([_p(1, "어떤 시설", "sight", sources=[_src(source, raw)])], _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags and "outdoor" in p.tags
+
+
+@pytest.mark.parametrize("title", ["경상남도교육청 과학교육원", "OO 갤러리", "갤러리아백화점 진주점", "OO 프리미엄 아울렛",
+                                   "롯데몰 진주점", "롯데시네마 진주", "메가박스 진주", "CGV 진주", "OO영화관",
+                                   "중앙지하도상가", "OO 문화예술회관", "OO 수학체험센터"])
+def test_operational_keywords_for_indoor_facilities(repo_root, title):
+    p = apply_curation([_p(1, title, "sight")], _operational_tags(repo_root)).places[0]
+    assert "indoor" in p.tags and "outdoor" not in p.tags
+
+
+@pytest.mark.parametrize("title, raw", [("진주 야외극장", {"category": "극장"}), ("OO 야외전시장", {})])
+def test_operational_outdoor_word_vetoes_indoor(repo_root, title, raw):
+    p = apply_curation([_p(1, title, "sight", sources=[_src("jinju_city.tourinfo", raw)])],
+                       _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags and "outdoor" in p.tags
+
+
+@pytest.mark.parametrize("title", ["OO박물관 앞 석탑", "OO기념관 묘역", "화석산지 전시관 터", "OO 고분 전시",
+                                   "봉수대 기념관", "OO비(碑) 전시관", "진주성 산성 체험관",
+                                   "야외전시장"])
+def test_operational_never_indoor_words_veto_keywords(repo_root, title):
+    p = apply_curation([_p(1, title, "culture")], _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags
+
+
+@pytest.mark.parametrize("title, category", [("아비꼬롯데몰진주점", "food"), ("유니클로 롯데몰 진주점", "shopping"),
+                                             ("솔하우스&갤러리", "stay")])
+def test_operational_indoor_rules_skip_mall_tenants(repo_root, title, category):
+    p = apply_curation([_p(1, title, category)], _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags
+
+
+def test_local_food_keywords_still_tag_food(repo_root):
+    p = apply_curation([_p(1, "진주냉면", "food")], _operational_tags(repo_root)).places[0]
+    assert "local_food" in p.tags
+
+
+def test_manual_tag_by_id():
+    c = {}
+    c["tags"] = {"manual": [{"match": {"id": "jh-t2", "title_contains": "센터"}, "tags": ["indoor"]}]}
+    places = [_p(1, "센터", "sight"), _p(2, "센터", "sight")]
+    res = apply_curation(places, c)
+    assert ["indoor" in p.tags for p in res.places] == [False, True] and not res.unresolved
+    c["tags"]["manual"][0]["match"]["id"] = "jh-nope"
+    assert apply_curation(places, c).unresolved == ["tags:센터"]
+
+
+def test_operational_manual_indoor_ids_resolve(repo_root):
+    """The manual indoor entries name stable place ids that exist in the published DB."""
+    import sqlite3
+
+    tags = _operational_tags(repo_root)["tags"]
+    entries = [e for e in tags["manual"] if "indoor" in e["tags"]]
+    assert len(entries) >= 3 and all(e["match"].get("id") for e in entries)
+    db = repo_root / "backend" / "app" / "data" / "places.db"
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        for e in entries:
+            row = con.execute("select title from places where id = ?", (e["match"]["id"],)).fetchone()
+            assert row and e["match"]["title_contains"] in row[0], e
+    finally:
+        con.close()
+

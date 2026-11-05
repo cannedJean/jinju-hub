@@ -174,7 +174,32 @@ NOW3 = datetime(2026, 11, 18, 3, 0, tzinfo=KST)
 
 
 def _state(settings) -> dict:
-    return json.loads(settings.output_db.with_name("refresh_state.json").read_text(encoding="utf-8"))
+    return json.loads(settings.state_file.read_text(encoding="utf-8"))
+
+
+def test_refresh_state_lives_outside_backend_and_frontend(tmp_settings):
+    """Render deploys rootDir=backend: a weekly state commit there would redeploy the API (M1)."""
+    from jinju_pipeline.settings import PIPELINE_ROOT, REPO_ROOT, Settings
+
+    default = Settings(_env_file=None).state_file
+    assert default == PIPELINE_ROOT / "state" / "refresh_state.json"
+    assert not default.is_relative_to(REPO_ROOT / "backend") and not default.is_relative_to(REPO_ROOT / "frontend")
+    assert not tmp_settings.state_file.is_relative_to(REPO_ROOT)  # tests never write the tracked file
+
+
+def test_cli_from_raw_and_incremental_are_mutually_exclusive(tmp_settings, capsys):
+    with pytest.raises(SystemExit) as ei:
+        main(["run", "--from-raw", "--incremental"], settings=tmp_settings)
+    assert ei.value.code == 2 and "not allowed with" in capsys.readouterr().err
+
+
+def test_cli_out_writes_state_next_to_out_but_reads_canonical(tmp_settings, recorded_transport, tmp_path):
+    asyncio.run(run_pipeline(tmp_settings, incremental=False, today=TODAY, now=NOW, transport=recorded_transport))
+    canonical = tmp_settings.state_file.read_bytes()
+    alt = tmp_path / "alt" / "places.db"
+    assert main(["run", "--out", str(alt)], settings=tmp_settings, transport=recorded_transport) == 0
+    assert (alt.parent / "refresh_state.json").exists()
+    assert tmp_settings.state_file.read_bytes() == canonical
 
 
 def _blocking(host: str, recorded):

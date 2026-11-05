@@ -208,6 +208,7 @@ def tmp_settings(tmp_path):
         raw_dir=tmp_path / "raw",
         work_dir=tmp_path / "work",
         state_dir=tmp_path / "state",
+        state_file=tmp_path / "out" / "refresh_state.json",
         output_db=tmp_path / "out" / "places.db",
         output_report=tmp_path / "out" / "report.json",
         curation_dir=Path(__file__).resolve().parent / "fixtures" / "curation",

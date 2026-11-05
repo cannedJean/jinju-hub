@@ -24,6 +24,9 @@ REQUIRED_CATEGORIES = ("sight", "food", "festival")
 # regression guards about 10 points below that run (see DATA.md); revisit once TourAPI is collected.
 COORDS_MIN_BY_CATEGORY = {"sight": 0.85, "culture": 0.55, "stay": 0.40}
 DROP_FLOOR = 0.8
+# A source that ran ``ok`` but returned 0 records fails the gate only if it used to be this big; smaller
+# sources can honestly be empty (tourapi.festival asks for festivals since Jan 1, so January may give 0).
+EMPTY_OK_FAIL_MIN = 20
 
 
 def _ratio(n: int, total: int) -> float:
@@ -108,9 +111,12 @@ def evaluate_gate(
     min_first_run: int = 300,
     previous_source_counts: dict[str, int] | None = None,
 ) -> GateResult:
-    """``previous_source_counts``: records per source in the previous published report.json. A source that
-    contributed records to the previous DB must still deliver records (ok or reused), otherwise publishing
-    would silently drop its places (e.g. TourAPI skipped because DATA_GO_KR_KEY is missing)."""
+    """``previous_source_counts``: records per source in the previous published report.json. For a source
+    that contributed records to the previous DB:
+
+    - absent, ``skipped`` or ``failed`` with 0 records -> FAIL (it is missing, e.g. no DATA_GO_KR_KEY);
+    - ``ok`` with 0 records -> FAIL if it had >= EMPTY_OK_FAIL_MIN records before, otherwise a warning.
+    """
     failures: list[str] = []
     warnings: list[str] = []
     final = report["final_count"]
@@ -121,10 +127,14 @@ def evaluate_gate(
         current = {s["source"]: s for s in report["sources"]}
         for source, count in sorted((previous_source_counts or {}).items()):
             now = current.get(source)
-            if count > 0 and (now is None or now["records"] == 0):
-                detail = "missing" if now is None else now["status"] + (f" ({now['error']})" if now["error"] else "")
-                failures.append(f"source {source} contributed {count} records to the previous DB "
-                                f"but has 0 records in this run: {detail}")
+            if count <= 0 or (now is not None and now["records"] > 0):
+                continue
+            detail = "missing" if now is None else now["status"] + (f" ({now['error']})" if now["error"] else "")
+            msg = f"source {source} contributed {count} records to the previous DB but has 0 records in this run: {detail}"
+            if now is not None and now["status"] == "ok" and count < EMPTY_OK_FAIL_MIN:
+                warnings.append(msg)
+            else:
+                failures.append(msg)
     elif final < min_first_run:
         failures.append(f"final_count {final} < first-run minimum {min_first_run}")
 
@@ -166,7 +176,8 @@ def write_report(report: dict, gate: GateResult, json_path: Path, md_path: Path)
     json_path, md_path = Path(json_path), Path(md_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.parent.mkdir(parents=True, exist_ok=True)
-    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    doc = {**report, "gate": {"passed": gate.passed, "failures": gate.failures, "warnings": gate.warnings}}
+    json_path.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
 
     md = [f"# 품질 리포트 / Quality report ({report['run_id']})", ""]
     md.append(f"- generated_at: {report['generated_at']}")

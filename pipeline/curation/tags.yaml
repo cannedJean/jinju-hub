@@ -1,17 +1,37 @@
 # indoor는 카테고리 기본값이 아니다: culture에는 진주시 문화재(묘·비석·석탑·봉수대·고분·화석산지 등 야외 유적)가
-# 대부분이라, 박물관류 이름(아래 keyword_tags)인 실내 시설에만 붙인다. "전시" 단독은 쓰지 않는다
-# ("초전시민체육공원"처럼 지명에 걸린다) — 전시관·전시장·전시실만.
+# 대부분이다. indoor는 ① 원본 분류값이 실내 시설인 행(source_category_tags), ② 실내 시설 이름(keyword_tags),
+# ③ 아래 manual(장소 ID 고정)에서만 붙는다. "전시" 단독은 "초전시민체육공원" 같은 지명에 걸려 쓰지 않는다.
 category_defaults:
   sight: [outdoor]
   leisure: [outdoor]
 keyword_tags:   # 제목 + 메뉴에서 부분 일치
   local_food: ["냉면", "비빔밥", "장어", "헛제사밥"]
-  indoor: ["박물관", "전시관", "전시장", "전시실", "미술관", "기념관", "과학관", "체험관", "문화관", "민속관", "전수관", "교육관",
-           "홍보관", "기록관", "문학관", "역사관", "예술관", "예술회관", "도서관"]
-keyword_excludes:   # 제목에 이 말이 있으면 그 태그를 붙이지 않는다(기본값·키워드 모두; manual은 예외)
-  indoor: ["묘", "비석", "석탑", "봉수대", "고분", "화석산지"]
+  indoor: ["박물관", "전시관", "전시장", "전시실", "미술관", "기념관", "과학관", "과학교육원", "체험관", "체험센터", "문화관",
+           "민속관", "전수관", "교육관", "홍보관", "기록관", "문학관", "역사관", "예술관", "예술회관", "문화예술회관",
+           "도서관", "갤러리", "백화점", "아울렛", "롯데몰", "시네마", "메가박스", "CGV", "영화관", "지하도상가"]
+source_category_tags:   # 저장된 원본 레코드(place_sources.raw_json)의 분류값
+  indoor:
+    - {source: jinju_city.tourinfo, field: category, values: [박물관, 극장, 공연장]}
+    - {source: tourapi.area, field: list.contenttypeid, values: ["14"]}   # 14 = 문화시설
+keyword_excludes:   # 제목에 이 말이 있으면 그 태그를 붙이지 않는다(자동 규칙 모두; manual은 예외)
+  # 비(·비석·비각은 비석류. 맨 "비"는 "롯데시네마 엠비씨네"에 걸려 쓰지 않는다.
+  indoor: ["야외", "묘", "비(", "비석", "비각", "봉수대", "산성", "석탑", "고분", "화석산지"]
+skip_categories:   # 자동 규칙이 이 태그를 붙이지 않는 카테고리: 몰·백화점 안 음식점·매장 수십 곳이 실내 필터를 덮지 않게
+  indoor: [food, shopping, stay]   # 몰·백화점·아울렛 본점 자체는 manual로 붙인다
+drops_defaults:   # 이 태그가 붙은 장소는 카테고리 기본 태그를 잃는다(실내 시설이 outdoor를 함께 갖지 않게)
+  indoor: [outdoor]
 manual:         # 가장 가까운 일치 장소 1곳에 태그 부여 (근거: 진주시 API 개요 문구)
   - {match: {title_contains: 촉석루, category: sight, near: [35.1895, 128.0819], within_m: 300}, tags: [night_view]}
   - {match: {title_contains: 진주성, category: sight, near: [35.1895, 128.0800], within_m: 300}, tags: [night_view]}
   - {match: {title_contains: 남가람 별빛길, category: sight, near: [35.1872, 128.0822], within_m: 500}, tags: [night_view]}   # "야간 산책 명소"
   - {match: {title_contains: 제5경, category: sight, near: [35.1753, 128.0762], within_m: 1000}, tags: [night_view]}     # "시내 야경은 ... 아름답다"
+  # 실내 시설(이름·분류로 안 잡히는 곳) — 장소 ID 고정, title_contains는 확인용
+  - {match: {id: jh-473ff178e4, title_contains: 키튼드림센터}, tags: [indoor]}
+  - {match: {id: jh-c7dbcc9038, title_contains: KSPO 스포츠가치센터}, tags: [indoor]}
+  - {match: {id: jh-b3d61bebc5, title_contains: 진주전통음식 체험}, tags: [indoor]}
+  - {match: {id: jh-1c048099f0, title_contains: 진양호 아천 북카페}, tags: [indoor]}
+  - {match: {id: jh-edb50c3f6b, title_contains: 진주 트래블라운지}, tags: [indoor]}
+  - {match: {id: jh-c24d3eeef7, title_contains: 진주공예창작지원센터}, tags: [indoor]}
+  - {match: {id: jh-5309446b01, title_contains: 롯데몰 진주점}, tags: [indoor]}
+  - {match: {id: jh-ea0d6486f1, title_contains: 갤러리아백화점 진주점}, tags: [indoor]}
+  - {match: {id: jh-37281c409c, title_contains: 모다아울렛 진주점}, tags: [indoor]}

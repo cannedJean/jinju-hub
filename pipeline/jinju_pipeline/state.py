@@ -1,4 +1,4 @@
-"""Refresh state committed next to places.db (``refresh_state.json``).
+"""Refresh state committed with the data (``pipeline/state/refresh_state.json``, ``Settings.state_file``).
 
 The scheduled workflow commits places.db only when its content_hash changes, but commits this small file
 on every published run, so state that must survive a run with unchanged data lives here:
@@ -20,17 +20,13 @@ from jinju_pipeline.raw_store import KST
 
 log = logging.getLogger(__name__)
 
-STATE_FILE = "refresh_state.json"
+STATE_FILE = "refresh_state.json"  # file name; `run --out` writes it next to the output places.db
 
 
 @dataclass
 class RefreshState:
     reused_streak: int = 0
     synced_at: dict[str, datetime] = field(default_factory=dict)
-
-
-def state_path_for(db_path: Path) -> Path:
-    return Path(db_path).with_name(STATE_FILE)
 
 
 def read_state(path: Path) -> RefreshState | None:

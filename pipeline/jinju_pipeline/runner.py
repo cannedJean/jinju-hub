@@ -28,7 +28,7 @@ from jinju_pipeline.region import load_region
 from jinju_pipeline.report import GateResult, build_report, evaluate_gate, write_report
 from jinju_pipeline.settings import Settings
 from jinju_pipeline.sources.base import Source, make_context
-from jinju_pipeline.state import RefreshState, advance_synced_at, read_state, state_path_for, write_state
+from jinju_pipeline.state import RefreshState, advance_synced_at, read_state, write_state
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ async def run_pipeline(
             raise ConfigError(f"--from-raw replays the previous places.db, which does not exist: {previous_db}")
         sources = replay_sources(previous)
         transport = httpx.MockTransport(_refuse_network)
-    state = read_state(state_path_for(previous_db))
+    state = read_state(settings.previous_state_file or settings.state_file)
     prior_streak = state.reused_streak if state else (previous.reused_streak if previous else 0)
     prior_synced = state.synced_at if state else {}
     previous_report = settings.previous_db.with_name("report.json") if settings.previous_db else settings.output_report
@@ -170,5 +170,5 @@ async def run_pipeline(
         id_order = next_id_order(previous, [p.id for p in curated.places])
         write_places_db(settings.output_db, curated.places, merged.aliases, curated.badges, meta, id_order)
         write_report(report, gate, settings.output_report, work / "report.md")
-        write_state(state_path_for(settings.output_db), RefreshState(reused_streak=streak, synced_at=synced))
+        write_state(settings.state_file, RefreshState(reused_streak=streak, synced_at=synced))
     return report, gate

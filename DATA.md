@@ -43,7 +43,7 @@ cd pipeline
 
 `DATA_GO_KR_KEY`가 없거나 빈 값(`DATA_GO_KR_KEY=`·공백)이면 TourAPI 두 소스는 호출 없이 `skipped`(오류 `skipped: no key`)로
 리포트된다(경고 로그). 직전 places.db가 없는 첫 빌드는 진주시 OpenAPI만으로 만들어지지만, 직전 report.json에서 레코드를 낸 소스가
-이번에 0건이면 게이트가 실패해 기존 places.db를 지킨다(§5) — 키가 빠진 주간 실행이 TourAPI 장소를 조용히 지우지 않는다.
+이번에 빠지거나 `skipped`면 게이트가 실패해 기존 places.db를 지킨다(§5) — 키가 빠진 주간 실행이 TourAPI 장소를 조용히 지우지 않는다.
 `verify-codes`는 종료 코드 2와 함께 "설정 오류: DATA_GO_KR_KEY가 설정되지 않았습니다…"를 출력한다.
 CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey`가 들어 있기 때문이다.
 
@@ -91,13 +91,16 @@ CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey
 
 - 한 소스가 실패해도 다른 소스는 계속한다. 실패한 소스는 직전 `places.db`의 `place_sources.raw_json`으로 대체하고
   `reused_previous`로 표시한다(연속 1회 경고, 2회 실패).
-- 키가 없으면 TourAPI 소스는 `skipped`(재사용 없음). 직전 DB에 레코드를 냈던 소스가 0건이면 게이트 실패(§5).
+- 키가 없으면 TourAPI 소스는 `skipped`(재사용 없음). 직전 DB에 레코드를 냈던 소스가 빠지면 게이트 실패(§5).
 - 쿼터 원장 `pipeline/data/state/quota.json`: TourAPI 키 기준 로컬 일 900회, GitHub 러너(`GITHUB_ACTIONS=true`)는 실행당 300회.
   진주시 페이지 호출(전체 수집 1회 약 117회)은 소스별 호출 수로만 세고 이 한도를 쓰지 않는다(무키 API) — TourAPI 쪽 쿼터 소진이
   진주시 소스를 실패시키지 않는다.
-- `backend/app/data/refresh_state.json`(커밋됨): 연속 재사용 횟수 `reused_streak`와 소스별 마지막 성공 수집 시각 `synced_at`.
-  게시(게이트 통과) 때마다 places.db 옆에 쓰고, 워크플로는 `content_hash`가 같아도 이 파일은 커밋한다(§9). 파일이 없으면
+- `pipeline/state/refresh_state.json`(커밋됨, `Settings.state_file`): 연속 재사용 횟수 `reused_streak`와 소스별 마지막 성공 수집 시각
+  `synced_at`. 게시(게이트 통과) 때마다 쓰고, 워크플로는 `content_hash`가 같아도 이 파일은 커밋한다(§9). 파일이 없으면
   재사용 횟수는 places.db `meta.reused_streak`에서 읽고, 증분 기준 시각이 없으니 TourAPI는 전체 목록으로 돈다.
+  백엔드는 이 파일을 읽지 않는다. 그래서 `backend/`(Render `rootDir`)와 `frontend/` 밖에 둔다. 상태만 바뀐 주간 커밋이 API를
+  재배포하지 않게 하려는 것이다(Render `buildFilter`를 쓰지 않은 이유: 파일이 백엔드에 속하지 않는다).
+  `pipeline/data/state/`(쿼터 원장, git 무시)와는 다른 폴더다.
 - 장소 ID는 직전 `places.db`를 읽어 승계한다(같은 source key가 속했던 가장 오래된 ID). 새 장소만 `jh-` + sha1(최초 source key)[:10].
   병합으로 사라진 ID는 `place_aliases`에 남고 직전 alias도 모두 이월된다. `id_order`는 직전 순번을 유지하고 새 ID를 뒤에 붙인다.
 
@@ -105,8 +108,8 @@ CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey
 
 | 명령 | 설명 |
 |---|---|
-| `run [--incremental] [--today YYYY-MM-DD] [--out PATH] [--until clean\|merge]` | 전체 실행. `--out`은 places.db를 쓸 경로(report.json·refresh_state.json은 같은 폴더) — 직전 스냅샷(ID 승계·alias 이월·80% 게이트)은 계속 `backend/app/data/places.db`에서 읽는다. `--until`은 해당 단계까지 실행 후 중단(게시 안 함) |
-| `run --from-raw [--out PATH]` | **수집 없음·네트워크 없음·키 불필요.** 직전 places.db의 `place_sources.raw_json`(실패 소스가 재사용하는 것과 같은 원본 레코드)을 다시 정제·병합·큐레이션·게이트에 넣는다. 큐레이션·정제 규칙만 바꿨을 때 쓴다. TourAPI 상세 응답은 원본 저장소(`pipeline/data/raw`, 목록 페이지만)가 아니라 여기에만 있어 이쪽이 완전한 사본이다. `reused_streak`·`synced_at`은 그대로 이월하고 report.json에 `replayed_from`(원래 run_id)을 남긴다 |
+| `run [--incremental] [--today YYYY-MM-DD] [--out PATH] [--until clean\|merge]` | 전체 실행. `--out`은 places.db를 쓸 경로(report.json·refresh_state.json은 같은 폴더) — 직전 스냅샷(ID 승계·alias 이월·80% 게이트)과 직전 상태는 계속 `backend/app/data/places.db`·`pipeline/state/refresh_state.json`에서 읽는다. `--until`은 해당 단계까지 실행 후 중단(게시 안 함) |
+| `run --from-raw [--out PATH]` | `--incremental`과 함께 쓸 수 없다. **수집 없음·네트워크 없음·키 불필요.** 직전 places.db의 `place_sources.raw_json`(실패 소스가 재사용하는 것과 같은 원본 레코드)을 다시 정제·병합·큐레이션·게이트에 넣는다. 큐레이션·정제 규칙만 바꿨을 때 쓴다. TourAPI 상세 응답은 원본 저장소(`pipeline/data/raw`, 목록 페이지만)가 아니라 여기에만 있어 이쪽이 완전한 사본이다. `reused_streak`·`synced_at`은 그대로 이월하고 report.json에 `replayed_from`(원래 run_id)을 남긴다 |
 | `verify-codes` | TourAPI `ldongCode2`로 48/170이 "진주시"인지와 타입별 건수 확인 |
 | `report --run-id <id>` | 지난 실행의 `report.md` 출력 |
 
@@ -215,8 +218,11 @@ CLI는 httpx 요청 로그(INFO)를 끈다 — TourAPI 요청 URL에 `serviceKey
 - 진주8경·30선·축제 장소 큐레이션 항목이 모두 장소로 해석될 것(`unresolved_curation == []`).
   태그 수작업 항목(`tags:`)의 미해석은 경고만
 - 직전 데이터 재사용 연속 1회 경고, 2회 이상 실패(횟수는 `refresh_state.json`에 저장돼 내용이 안 바뀐 주에도 이어진다)
-- 직전 report.json에서 레코드를 낸 소스는 이번에도 레코드가 있을 것(`ok` 또는 `reused_previous`). 빠지거나 `skipped`/0건이면 실패
-  — 예: `DATA_GO_KR_KEY`가 빠진 실행(`source tourapi.area contributed 199 records … skipped (skipped: no key)`)
+- 직전 report.json에서 레코드를 낸 소스가 이번에 0건이면:
+  - 소스가 없거나 `skipped`, 또는 `failed`이면 실패. 예: `DATA_GO_KR_KEY`가 빠진 실행(`source tourapi.area contributed 199 records … skipped (skipped: no key)`).
+  - `ok`인데 0건이면 직전 20건 이상일 때만 실패하고, 그보다 작으면 경고만 한다. `tourapi.festival`은 `eventStartDate={올해}0101`로
+    조회하므로 1월에는 정말 0건일 수 있다(예: 8 → 0은 경고).
+  - 게이트 판정(통과·실패·경고)은 report.json의 `gate`에도 남는다.
 
 **임계값 조정 기록(스펙 §5.7 "첫 실제 실행에서 게이트가 실패하면 빌더가 임계값을 조정할 수 있되 근거를 기록")**:
 스펙의 시작값은 sight·culture·stay 모두 0.85. 2026-11-04 첫 실행(진주시 API만, TourAPI 키 없음)의 좌표 보유율은
@@ -268,13 +274,32 @@ TourAPI 보강 실행(2026-11-04)에서 다시 봤다: sight 0.97, culture 0.65,
   1:1이 아닌 후보(진주중앙시장·논개시장 통합 항목, 하연옥 본점≠하대점, 의기사와 의암≠제2경)는 넣지 않았다.
   진주시 음식점 API에 향토 음식점이 적어 먹거리 묶음에 전통시장·음식 체험을 넣었다. TourAPI 수집 후 다시 고르는 것을 권한다.
   항목 수정 후 `run`을 다시 실행하면 된다(미해석 항목이 있으면 게이트가 실패해 기존 DB가 유지된다).
-- `tags.yaml`: indoor(박물관류 이름만: 박물관·전시관/장/실·미술관·기념관·과학관·체험관·문화관·민속관·전수관·교육관·홍보관·기록관·
-  문학관·역사관·예술관·예술회관·도서관), outdoor(명소·레포츠), local_food(냉면·비빔밥·장어·헛제사밥), night_view(수작업: 촉석루·진주성·남가람 별빛길·망진산 봉수대).
-  culture 카테고리 기본값 indoor는 2026-11-05에 없앴다 — culture 578곳 대부분이 진주시 문화재(묘·비석·고분·석탑·봉수대·화석산지)라
-  "비 오는 날 실내" 필터·챗봇 추천이 야외 유적을 돌려줬다. `keyword_excludes`의 말(묘·비석·석탑·봉수대·고분·화석산지)이 제목에 있으면
-  indoor를 붙이지 않는다. "전시" 단독은 "초전시민체육공원" 같은 지명에 걸려 쓰지 않는다.
-  재생성(`run --from-raw`, 2026-11-05): 장소 1,250곳·ID·이미지·alias·배지·id_order 모두 그대로, 바뀐 것은 태그뿐 — culture 568곳에서
-  indoor 제거, 시설 5곳(진주시 전통예술회관·진주 남성당 교육관·남강댐물문화관·숲속어린이도서관·경상남도 문화예술회관)에 추가, indoor 합계 584 → 21.
+- `tags.yaml`: outdoor(명소·레포츠 기본값), local_food(냉면·비빔밥·장어·헛제사밥), night_view(수작업: 촉석루·진주성·남가람 별빛길·망진산 봉수대),
+  indoor(실내 시설만). culture 카테고리 기본값 indoor는 2026-11-05에 없앴다. culture 578곳 대부분이 진주시 문화재
+  (묘·비석·고분·석탑·봉수대·화석산지)여서 "비 오는 날 실내" 필터와 챗봇 추천이 야외 유적을 돌려줬기 때문이다.
+  indoor가 붙는 경우는 셋이다.
+  1. `source_category_tags`: 저장된 원본의 분류값이 실내 시설인 행. `jinju_city.tourinfo`의 `category`가 박물관·극장·공연장이거나,
+     `tourapi.area`의 `list.contenttypeid`가 14(문화시설)인 경우.
+  2. `keyword_tags`: 실내 시설 이름(박물관·전시관/장/실·미술관·기념관·과학관·과학교육원·체험관·체험센터·문화관·예술회관·도서관·
+     갤러리·백화점·아울렛·롯데몰·시네마·메가박스·CGV·영화관·지하도상가 등).
+  3. `manual`: 장소 ID로 고정한 9곳(키튼드림센터·KSPO 스포츠가치센터·진주전통음식 체험·진양호 아천 북카페·진주 트래블라운지·
+     진주공예창작지원센터·롯데몰 진주점·갤러리아백화점 진주점·모다아울렛 진주점).
+
+  규칙 보조 장치:
+  - `keyword_excludes`: 제목에 야외·묘·비(·비석·비각·봉수대·산성·석탑·고분·화석산지가 있으면 자동 규칙이 indoor를 붙이지 않는다.
+    맨 "비"는 "롯데시네마 엠비씨네"에, 맨 "전시"는 "초전시민체육공원"에 걸려 쓰지 않는다.
+  - `skip_categories`: food·shopping·stay에는 자동 규칙이 indoor를 붙이지 않는다. 몰·백화점 안의 음식점·매장 수십 곳이 실내 목록을
+    덮지 않게 하려는 것이다. 몰·백화점·아울렛 본점은 manual로 붙인다.
+  - `drops_defaults`: indoor가 붙은 장소는 카테고리 기본값 outdoor를 잃는다. 한 장소가 indoor와 outdoor를 함께 갖지 않는다.
+
+  재생성(`run --from-raw`, 2026-11-05, 원래 스냅샷 20261104T125916+0900에서): 장소 1,250곳·ID·이미지·alias·배지·id_order·
+  place_sources(중복 2행 제외)는 모두 그대로이고, 바뀐 것은 태그뿐이다.
+  - culture 565곳에서 indoor를 뺐다.
+  - 실내 시설 25곳에 indoor를 더했다.
+  - indoor 장소 28곳에서 outdoor를 뺐다(앞의 25곳 중 sight·leisure 22곳과, 원래 indoor·outdoor를 함께 갖던 sight 박물관 6곳).
+  - indoor 합계 584 → 44(sight 27, culture 13, shopping 3, leisure 1).
+  - 내장 DB 계약 테스트(`test_published_db_has_no_outdoor_heritage_tagged_indoor`): indoor 제목에 `묘|비\(|봉수대|산성|석탑|고분|화석`이 없고,
+    indoor와 outdoor를 함께 가진 장소가 없다.
 - `festival_programs.yaml`: 유등축제 → 진주성·진주 촉석루·남가람 별빛길(진주시 API에 "남강둔치"·"진주교" 항목이 없어 대체). 매처에 category를 지정해 축제 행·동명 음식점에 걸리지 않게 한다.
 - `badges.yaml`: 배지 6종 규칙 → 파이프라인이 장소 ID 집합으로 풀어 `badges.rule_json`에 저장.
 - `merge_overrides.yaml`: 병합 예외(§4).
@@ -319,7 +344,8 @@ $env:BUILD_FIXTURE_OUT="..\backend\tests\fixtures\places_fixture.db"; .venv\Scri
 
 - `.github/workflows/data-refresh.yml`: 매주 월 03:00 KST(`0 18 * * 0` UTC; schedule은 기본 브랜치에서만 돈다) + 수동 실행 →
   `python -m jinju_pipeline run --incremental` → 게이트(실패하면 잡이 빨간색, 커밋 없음) → `content_hash`가 바뀌면 places.db·report.json·
-  refresh_state.json 커밋, 같으면 places.db·report.json은 커밋본으로 되돌리고 **refresh_state.json만** 바뀌었을 때 커밋한다.
+  `pipeline/state/refresh_state.json` 커밋, 같으면 places.db·report.json은 커밋본으로 되돌리고 **refresh_state.json만** 바뀌었을 때 커밋한다
+  (backend/ 밖이라 Render를 재배포하지 않는다).
 - 증분 모드의 상태 원천은 **커밋된 직전 places.db와 refresh_state.json**이다(러너는 매번 깨끗함). TourAPI는 자기 `synced_at` 이후 변경분만
   상세 재호출, 진주시 API는 매번 전체 재수집.
 - GitHub 러너(해외 IP)에서 jinju.go.kr이 막히면 진주시 소스는 직전 DB의 원본으로 대체되고 경고로 통과한다(내용이 같아도 `reused_streak` 1이
@@ -329,7 +355,7 @@ $env:BUILD_FIXTURE_OUT="..\backend\tests\fixtures\places_fixture.db"; .venv\Scri
 ```powershell
 git pull
 cd pipeline; .venv\Scripts\python -m jinju_pipeline run --incremental; cd ..
-git add backend/app/data/places.db backend/app/data/report.json backend/app/data/refresh_state.json
+git add backend/app/data/places.db backend/app/data/report.json pipeline/state/refresh_state.json
 git commit -m "data: refresh places.db (local run)"; git push
 ```
 
