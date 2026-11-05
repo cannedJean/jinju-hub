@@ -11,7 +11,20 @@ const emit = defineEmits(['remove', 'select'])
 
 // Removal is immediate; the page offers an undo snackbar.
 const remove = (it) => emit('remove', it.id)
-const asPlace = (it) => ({ id: it.id, title: it.title, category: it.category, lat: it.lat, lng: it.lng })
+const asPlace = (it) => ({
+  ...it,
+  id: it.id,
+  title: it.title,
+  category: it.category,
+  lat: it.lat,
+  lng: it.lng,
+  hero_image: it.hero_image ?? null,
+  summary: it.summary ?? it.addr ?? null,
+  addr: it.addr ?? null,
+  jinju8_rank: it.jinju8_rank ?? null,
+  is_collection: it.is_collection ?? null,
+  tags: it.tags ?? [],
+})
 </script>
 
 <template>
@@ -49,6 +62,9 @@ const asPlace = (it) => ({ id: it.id, title: it.title, category: it.category, la
   display: flex;
   align-items: center;
   gap: 8px;
+}
+:deep(.place-card__save) {
+  display: none;
 }
 .tomb {
   flex: 1;
