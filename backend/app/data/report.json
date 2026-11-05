@@ -1,72 +1,71 @@
 {
-  "run_id": "20261104T125916+0900",
-  "generated_at": "2026-11-04T12:59:47+09:00",
+  "run_id": "20261105T113949+0900",
+  "generated_at": "2026-11-05T11:39:50+09:00",
   "out_of_bbox_final": 0,
   "reused_streak": 0,
-  "content_hash": "749958056c71b4f732b9c193c43cd59fc7e438d2cad896b6733034f1f14880ba",
+  "content_hash": "6b19f086d7f0211897d858c6443a6c76adad4fd000b6df76236061797e9290a4",
+  "replayed_from": "20261104T125916+0900",
   "sources": [
     {
       "source": "jinju_city.tourinfo",
       "status": "ok",
-      "records": 191,
-      "calls": 20,
+      "records": 190,
+      "calls": 0,
       "error": null
     },
     {
       "source": "jinju_city.restaurant",
       "status": "ok",
-      "records": 269,
-      "calls": 27,
+      "records": 267,
+      "calls": 0,
       "error": null
     },
     {
       "source": "jinju_city.festival",
       "status": "ok",
       "records": 9,
-      "calls": 1,
+      "calls": 0,
       "error": null
     },
     {
       "source": "jinju_city.heritage",
       "status": "ok",
-      "records": 590,
-      "calls": 59,
+      "records": 589,
+      "calls": 0,
       "error": null
     },
     {
       "source": "jinju_city.lodging",
       "status": "ok",
       "records": 94,
-      "calls": 10,
+      "calls": 0,
       "error": null
     },
     {
       "source": "tourapi.area",
       "status": "ok",
       "records": 199,
-      "calls": 433,
+      "calls": 0,
       "error": null
     },
     {
       "source": "tourapi.festival",
       "status": "ok",
       "records": 8,
-      "calls": 1,
+      "calls": 0,
       "error": null
     }
   ],
-  "cleaned_count": 1358,
-  "dropped": {
-    "out_of_region": 2
-  },
+  "cleaned_count": 1356,
+  "dropped": {},
   "merge": {
-    "pairs": 108,
+    "pairs": 106,
     "by_reason": {
       "force_merge": 2,
-      "same_name": 64,
-      "fuzzy_name": 34,
+      "same_name": 65,
+      "same_name_addr": 1,
       "same_phone": 7,
-      "same_name_addr": 1
+      "fuzzy_name": 31
     }
   },
   "final_count": 1250,
@@ -106,8 +105,8 @@
     "unknown": 3
   },
   "detail_pending": 0,
-  "quota_used": 551,
+  "quota_used": 0,
   "unresolved_curation": [],
   "unresolved_tags": [],
-  "elapsed_s": 30.93
+  "elapsed_s": 0.58
 }
