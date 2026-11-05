@@ -43,6 +43,13 @@ def _settings(**kw) -> Settings:
     return Settings(_env_file=None, **kw)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_daily_budget():
+    chat_service.reset_daily_budget()
+    yield
+    chat_service.reset_daily_budget()
+
+
 class FakeClient:
     """Stands in for AsyncAnthropic: records kwargs, returns a canned response or raises."""
 
@@ -188,7 +195,7 @@ def test_call_parameters(repo, db, monkeypatch):
     assert kw["output_config"] == {"effort": "low"}
     assert kw["fallbacks"] == "default"
     assert "server-side-fallback-2026-07-01" in kw["betas"]
-    assert kw["max_tokens"] == 4096
+    assert kw["max_tokens"] == 1024
     assert kw["system"] == chat_service.SYSTEM_PROMPT
     msgs = kw["messages"]
     assert len(msgs) == 11 and msgs[0]["content"] == "q6"
@@ -213,22 +220,135 @@ def test_system_prompt_rules():
     assert "[place:" in p and "컨텍스트에 없는" in p and "방문 전" in p
 
 
-def test_upstream_error_502(db_client, monkeypatch):
+def test_upstream_error_returns_flagged_fallback(db_client, monkeypatch):
+    # C22: a Claude failure or timeout answers 200 with the deterministic fallback, flagged for the UI.
     import anthropic
     import httpx
 
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
     errors = [
         anthropic.APIConnectionError(request=req),
+        anthropic.APITimeoutError(request=req),
         anthropic.RateLimitError("rl", response=httpx.Response(429, request=req), body=None),
         anthropic.InternalServerError("ise", response=httpx.Response(500, request=req), body=None),
+        anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=req), body=None),
     ]
     c = db_client(places_db_path=FIXTURE_DB, **KEYED)
     for err in errors:
         _patch(monkeypatch, FakeClient(exc=err))
         r = c.post("/api/chat", json={"message": "진주성 근처 냉면집", "history": []})
-        assert r.status_code == 502, type(err)
+        assert r.status_code == 200, type(err)
+        body = r.json()
+        assert body["fallback"] is True and body["answer"] and body["sources"], type(err)
         assert "sk-ant" not in r.text
+
+
+def test_claude_answer_is_not_flagged_fallback(repo, db, monkeypatch):
+    _patch(monkeypatch, FakeClient(text="네"))
+    assert _answer("진주성 근처 냉면집", repo, db, _settings(**KEYED)).fallback is False
+    assert _answer("진주성 근처 냉면집", repo, db, _settings()).fallback is True  # no key
+
+
+def test_daily_limit_switches_to_fallback_without_calling_claude(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    s = _settings(chat_daily_limit=2, **KEYED)
+    results = [_answer("진주성 근처 냉면집", repo, db, s) for _ in range(4)]
+    assert len(fake.calls) == 2
+    assert [r.fallback for r in results] == [False, False, True, True]
+
+
+def test_daily_limit_resets_on_a_new_kst_day(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    s = _settings(chat_daily_limit=1, **KEYED)
+    monkeypatch.setattr(chat_service, "kst_today", lambda: date(2026, 11, 5))
+    _answer("진주성 근처 냉면집", repo, db, s)
+    _answer("진주성 근처 냉면집", repo, db, s)
+    monkeypatch.setattr(chat_service, "kst_today", lambda: date(2026, 11, 6))
+    _answer("진주성 근처 냉면집", repo, db, s)
+    assert len(fake.calls) == 2
+
+
+def test_daily_limit_setting_from_env(monkeypatch):
+    monkeypatch.setenv("CHAT_DAILY_LIMIT", "7")
+    assert Settings(_env_file=None).chat_daily_limit == 7
+    monkeypatch.delenv("CHAT_DAILY_LIMIT")
+    assert Settings(_env_file=None).chat_daily_limit == 200
+
+
+def test_claude_budget_fits_inside_frontend_timeout():
+    # M1/M13: retrieval + the weather wait + the Claude call must finish before the browser's 30 s chat timeout.
+    frontend_chat_timeout = 30.0
+    s = _settings()
+    assert s.anthropic_timeout_seconds + chat_service.WEATHER_TIMEOUT_SECONDS + 5 <= frontend_chat_timeout
+    assert s.anthropic_max_tokens <= 1024
+
+
+def test_max_tokens_clamped_to_1024(repo, db, monkeypatch):
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    _answer("진주성 근처 냉면집", repo, db, _settings(anthropic_max_tokens=4096, **KEYED))
+    assert fake.calls[0]["max_tokens"] == 1024
+
+
+def test_long_message_never_500(db_client):
+    # C5/C20: a 500-char message (the input limit) of many words or one long token must not crash.
+    c = db_client(places_db_path=FIXTURE_DB)
+    words = " ".join(f"단어{i:03d}" for i in range(90))[:500]
+    for msg in (words, "가" * 500, "진주성 근처 " + "냉면" * 240):
+        r = c.post("/api/chat", json={"message": msg[:500]})
+        assert r.status_code == 200, msg[:20]
+        assert r.json()["answer"]
+    assert c.post("/api/chat", json={"message": "가" * 1000}).status_code == 422  # over the input limit
+
+
+def test_long_message_terms_capped():
+    terms = chat_service._analyze_terms(" ".join(f"단어{i:03d}" for i in range(200)) + " " + "가" * 900)
+    assert len(terms) <= chat_service.MAX_TERMS
+    assert all(len(t.text) <= chat_service.MAX_TERM_CHARS for t in terms)
+    assert len(" ".join(t.text for t in terms)) <= 200
+
+
+def test_long_assistant_history_is_truncated_not_rejected(db_client, monkeypatch):
+    # M2/M9: one long answer must not break every later request in the session with 422.
+    fake = FakeClient(text="네")
+    _patch(monkeypatch, fake)
+    c = db_client(places_db_path=FIXTURE_DB, **KEYED)
+    history = [{"role": "user", "content": "냉면"}, {"role": "assistant", "content": "가" * 5000}]
+    r = c.post("/api/chat", json={"message": "진주성 근처 냉면집", "history": history})
+    assert r.status_code == 200
+    sent = fake.calls[0]["messages"][1]["content"]
+    assert sent.startswith("가") and len(sent) <= 2000
+
+
+def test_demo_date_honoured_only_in_demo_mode(db_client, monkeypatch):
+    # C3/C21: the chat uses the demo reference date the same way /api/festivals does.
+    seen = []
+    orig = chat_service.gather_context
+
+    async def spy(message, repo, db, today, settings=None):
+        seen.append(today)
+        return await orig(message, repo, db, today, settings)
+
+    monkeypatch.setattr(chat_service, "gather_context", spy)
+    on = db_client(places_db_path=FIXTURE_DB)
+    assert on.post("/api/chat", json={"message": "축제 알려줘", "today": "2026-10-10"}).status_code == 200
+    assert seen[-1] == date(2026, 10, 10)
+    assert on.post("/api/chat", json={"message": "축제 알려줘", "today": "10월 10일"}).status_code == 422
+    from app.services.festival_status import kst_today
+    off = db_client(places_db_path=FIXTURE_DB, demo_date_override_enabled=False)
+    assert off.post("/api/chat", json={"message": "축제 알려줘", "today": "2026-10-10"}).status_code == 200
+    assert seen[-1] == kst_today()
+    assert on.post("/api/chat", json={"message": "축제 알려줘"}).status_code == 200
+    assert seen[-1] == kst_today()
+
+
+def test_demo_date_reaches_festival_context(db_client):
+    c = db_client(places_db_path=FIXTURE_DB)
+    a = c.post("/api/chat", json={"message": "진행 중인 축제 있어?", "today": "2026-11-04"}).json()["answer"]
+    b = c.post("/api/chat", json={"message": "진행 중인 축제 있어?", "today": "2025-01-01"}).json()["answer"]
+    assert a != b
 
 
 def test_chat_endpoint_ok(db_client, monkeypatch):
@@ -494,3 +614,19 @@ def test_activity_word_is_target_not_location():
     assert not chat_service._has_location_shape("체험활동")
     assert chat_service._has_location_shape("가좌동")
     assert [t.text for t in chat_service._analyze_terms("체험활동 알려줘")] == ["체험활동"]
+
+
+def test_anchored_question_without_nearby_match_says_so(real_like_repo, db, monkeypatch):
+    # M0: nothing within the cap of the anchor -> no far places presented as near, and the answer says so.
+    monkeypatch.setattr(chat_service, "_ANCHOR_CAP_M", 1)
+    ret = chat_service._retrieve("진주성 근처 냉면집", real_like_repo, db, TODAY)
+    assert not [i for i in ret.items if i.group == "place"]
+    assert "찾지 못함" in ret.context()
+    assert "찾지 못함" in chat_service._fallback_answer(ret)
+
+
+def test_anchored_lines_carry_distance(real_like_repo, db):
+    ret = chat_service._retrieve("진주성 근처 냉면집", real_like_repo, db, TODAY)
+    lines = [i.line for i in ret.items if i.group == "place"]
+    assert lines and all("진주성에서 약 " in ln for ln in lines)
+    assert all(ln.count(" | ") == 3 for ln in lines)

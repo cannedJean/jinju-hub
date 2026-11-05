@@ -44,11 +44,16 @@
 | Render | `ALLOWED_ORIGINS` | Netlify 주소, 끝 슬래시 없음 |
 | Render | `RATE_LIMIT` | `10/minute` |
 | Render | `DEMO_DATE_OVERRIDE_ENABLED` | `true` |
+| Render | `CHAT_DAILY_LIMIT` | 선택. 기본 `200`. 프로세스 전체의 하루(KST) Claude 호출 상한. 넘으면 Claude를 부르지 않고 폴백 답변(`fallback: true`) |
+| Render | `ANTHROPIC_TIMEOUT_SECONDS` | 선택. 기본 `20`. 프론트 챗 타임아웃(30초)에서 날씨 대기(3초)와 여유를 뺀 값보다 작게 둔다 |
+| Render | `ANTHROPIC_MAX_TOKENS` | 선택. 기본 `1024`. 1024보다 크게 넣어도 1024로 제한된다 |
 | Netlify | `VITE_API_BASE_URL` | Render 주소 (`/api` 제외) |
 | Netlify | `VITE_TILE_URL` / `VITE_TILE_URL_DARK` | 선택. 지도 타일 URL 덮어쓰기. 기본은 OSM (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`); CARTO는 API 키가 필요해 제외 |
 | GitHub Actions | `DATA_GO_KR_KEY` | data-refresh 워크플로 시크릿 |
 
 실제 값은 각 플랫폼 대시보드와 로컬 `.env`(git 무시)에만 둔다. 저장소에는 넣지 않는다.
+
+챗봇 비용·장애 동작: Claude 호출이 실패하거나 시간 초과되면, 또는 `CHAT_DAILY_LIMIT`에 도달하면 `/api/chat`은 502가 아니라 200과 결정적 폴백 답변(`fallback: true`)을 돌려준다. `ANTHROPIC_API_KEY`를 넣기 전에 Anthropic 콘솔에서 워크스페이스 지출 한도도 설정해 둔다.
 
 ## 3. GitHub Actions
 - `data-refresh`는 `schedule`이 **기본 브랜치에서만** 돈다. `main` 병합 전에는 Actions 탭에서 `workflow_dispatch`로 `feat/jinjuhub-mvp`를 선택해 실행한다.
