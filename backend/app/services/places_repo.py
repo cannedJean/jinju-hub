@@ -189,6 +189,18 @@ class PlacesRepo:
                          totalPages=math.ceil(total / q.size) if total else 0)
 
     @_locked
+    def menu_texts(self, ids: list[str]) -> dict[str, str]:
+        """id -> menu text for the given places (rows without a menu are omitted)."""
+        out: dict[str, str] = {}
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            for r in self._con.execute(
+                    f"SELECT id, menu FROM places WHERE menu IS NOT NULL AND id IN ({','.join('?' * len(chunk))})",
+                    chunk):
+                out[r["id"]] = r["menu"]
+        return out
+
+    @_locked
     def markers(self, categories: list[str] | None) -> list[Marker]:
         sql = ("SELECT id, lat, lng, category, title, is_collection FROM places "
                "WHERE lat IS NOT NULL AND lng IS NOT NULL")

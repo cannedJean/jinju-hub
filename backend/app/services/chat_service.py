@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -33,7 +33,7 @@ WEATHER_TIMEOUT_SECONDS = 3
 
 # keyword -> category code (checked by substring; an intent may match several categories)
 TYPE_KEYWORDS: dict[str, str] = {
-    "맛집": "food", "음식": "food", "식당": "food", "냉면": "food", "비빔밥": "food", "국밥": "food",
+    "맛집": "food", "음식": "food", "식당": "food", "냉면": "food", "비빔밥": "food", "국밥": "food", "카페": "food",
     "숙소": "stay", "숙박": "stay", "호텔": "stay", "모텔": "stay", "펜션": "stay",
     "축제": "festival", "행사": "festival",
     "박물관": "culture", "역사": "culture", "유적": "culture", "문화재": "culture",
@@ -51,15 +51,29 @@ STOP_WORDS = {
     "알려주세요", "추천해줘", "찾아줘", "보여줘", "있어", "있나요", "좀", "비", "오는", "날", "에서", "에서의",
     "저녁", "점심", "아침", "먹을", "만한", "반나절", "둘러볼", "동안", "하루", "코스",
     "먹고", "싶어", "어디야", "가까운", "볼만한", "근처에", "주변에", "인근", "옆",
+    "맛있", "맛있는", "맛집인", "유명한", "유명", "좋은", "괜찮은", "예쁜", "분위기", "인기", "핫한", "일정",
 }
 # A term directly followed by one of these words is a location (landmark/area), not the thing searched for.
 _LOCATION_MARKERS = ("근처", "주변", "부근", "옆", "가까운", "인근")
-_LOCATION_SUFFIXES = ("동", "면", "읍", "로", "길")
-_NOODLE_ENDINGS = ("냉면", "라면", "짜장면", "비빔면", "짬뽕면")  # 면 here is a dish, not an administrative 면
+# Jinju's 읍/면 (a bare 면 suffix is not enough: 냉면, 볶음면 and 쫄면 are dishes); 동 names are matched by suffix.
+_ADMIN_AREAS = (
+    "문산읍", "내동면", "정촌면", "금곡면", "진성면", "일반성면", "이반성면", "사봉면", "지수면", "대곡면",
+    "금산면", "집현면", "미천면", "명석면", "대평면", "수곡면",
+)
+# Nouns that name a kind of place, never one specific landmark: they must not become the distance anchor.
+_GENERIC_PLACES = {"공원", "시장", "집", "우리집", "역", "학교", "카페", "식당", "호텔"}
+# Dish/type words (besides the TYPE_KEYWORDS keys) that identify what the user is looking for.
+_DISH_WORDS = {
+    "국수", "칼국수", "순대", "삼겹살", "갈비", "장어", "치킨", "커피", "볶음면", "쫄면", "밀면", "짜장면", "라면",
+    "해장국", "설렁탕", "곰탕", "삼계탕", "한정식", "횟집", "빵", "디저트", "족발", "보쌈", "고기",
+}
+_SHOP_SUFFIXES = ("가게", "식당", "집")  # 냉면집 / 냉면가게 / 냉면식당 -> 냉면
 _ANCHOR_RADIUS_M = 3000
 _TARGET_LIMIT = 50  # PlaceQuery.size max
 # Trailing particles stripped from a token when the remaining stem keeps at least 2 chars (longest first).
-_PARTICLES = ("에서", "으로", "로", "에", "의", "을", "를", "이", "가", "은", "는", "도")
+_PARTICLES = (
+    "에서", "으로", "이나", "이랑", "하고", "로", "에", "의", "을", "를", "이", "가", "은", "는", "도", "나", "랑",
+)
 
 INDOOR_WORDS = ("실내", "비가", "비 오", "비오", "우천")
 WEATHER_WORDS = ("날씨", "기온", "실내", "실외", "야외", "비가", "비 오", "비오", "우산", "더워", "추워")
@@ -126,42 +140,57 @@ def _detect_categories(message: str) -> list[str]:
     return list(dict.fromkeys(code for kw, code in TYPE_KEYWORDS.items() if kw in message))
 
 
-def _normalize_token(tok: str) -> str | None:
-    """Lower-cased token -> search term (particles and 집 stripped), or None when it is not searchable."""
+class _Term(NamedTuple):
+    text: str
+    marked: bool = False  # directly followed by a location marker (근처, 주변, ...)
+    shop: bool = False  # a 집/가게/식당 suffix was stripped (냉면집 -> 냉면)
+
+
+def _normalize_token(tok: str) -> tuple[str, bool] | None:
+    """Lower-cased token -> (search term, shop-suffix stripped), or None when it is not searchable."""
+    shop = False
     if tok not in STOP_WORDS:
         for suffix in _PARTICLES:
             if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
                 tok = tok[: -len(suffix)]
                 break
-    if len(tok) > 2 and tok.endswith("집"):  # 냉면집 -> 냉면 (after the particle: 냉면집에서 -> 냉면)
-        tok = tok[:-1]
+    for suffix in _SHOP_SUFFIXES:  # after the particle: 냉면집에서 -> 냉면
+        if tok.endswith(suffix) and len(tok) - len(suffix) >= 2:
+            tok, shop = tok[: -len(suffix)], True
+            break
     if len(tok) < 2 or tok in STOP_WORDS or tok in INTENT_WORDS:
         return None
     if tok.startswith(("알려", "추천", "찾아", "보여")):
         return None
-    return tok
+    return tok, shop
 
 
-def _analyze_terms(message: str) -> list[tuple[str, bool]]:
-    """Search terms in message order, each flagged True when directly followed by a location marker."""
+def _analyze_terms(message: str) -> list[_Term]:
+    """Search terms in message order, with their location-marker and shop-suffix flags."""
     toks = re.findall(r"[가-힣A-Za-z0-9]+", message.lower())
-    found: dict[str, bool] = {}
+    found: dict[str, _Term] = {}
     for idx, tok in enumerate(toks):
-        term = _normalize_token(tok)
-        if term is None:
+        norm = _normalize_token(tok)
+        if norm is None:
             continue
+        term, shop = norm
         nxt = toks[idx + 1] if idx + 1 < len(toks) else ""
-        found[term] = found.get(term, False) or nxt.startswith(_LOCATION_MARKERS)
-    return list(found.items())
+        old = found.get(term)
+        found[term] = _Term(term, bool(old and old.marked) or nxt.startswith(_LOCATION_MARKERS),
+                            bool(old and old.shop) or shop)
+    return list(found.values())
 
 
 def _search_terms(message: str) -> list[str]:
-    return [t for t, _ in _analyze_terms(message)]
+    return [t.text for t in _analyze_terms(message)]
 
 
 def _has_location_shape(term: str) -> bool:
-    return (len(term) >= 3 and term.endswith(_LOCATION_SUFFIXES)
-            and not (term.endswith("면") and term.endswith(_NOODLE_ENDINGS)))
+    return (len(term) >= 3 and term.endswith("동")) or term in _ADMIN_AREAS
+
+
+def _is_dish_word(term: str) -> bool:
+    return term in TYPE_KEYWORDS or term in _DISH_WORDS
 
 
 def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> tuple[float, float] | None:
@@ -169,6 +198,8 @@ def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> tupl
 
     strict (term not marked as a location): only a jinju8 place or an exact title counts, so that a type word
     such as 카페 never resolves to a sight that merely has it in its name."""
+    if term in _GENERIC_PLACES:
+        return None
     hits = repo.search(PlaceQuery(q=term, category=["sight", "culture"], size=_TARGET_LIMIT)).items
     named = [p for p in hits if term in p.title.lower() and p.lat is not None and p.lng is not None
              and (not strict or p.jinju8_rank is not None or p.title.lower() == term)]
@@ -178,10 +209,12 @@ def _resolve_landmark(repo: PlacesRepo, term: str, strict: bool = False) -> tupl
     return best.lat, best.lng  # type: ignore[return-value]
 
 
-def _search_places(
-    repo: PlacesRepo, categories: list[str], terms: list[tuple[str, bool]], tags: list[str]
-) -> list:
-    """Places for the question: TARGET terms (the dish/type) filter, a LOCATION term anchors the distance sort."""
+def _search_places(repo: PlacesRepo, categories: list[str], terms: list[_Term], tags: list[str]) -> list:
+    """Places for the question.
+
+    LOCATION terms (marked 근처.., 동 names, Jinju 읍/면, landmarks) only anchor the distance sort. Of the TARGET
+    terms the PRIMARY ones (dish words; else a 집-stripped term; else the last term) are a required filter, the
+    rest only boost. Strong matches (title or menu) rank ahead of overview-only ones, each tier nearest first."""
 
     def run(q: str | None, sort: str = "relevance", size: int = MAX_PLACES, **kw):
         return repo.search(
@@ -190,42 +223,54 @@ def _search_places(
 
     anchor: tuple[float, float] | None = None
     locations: list[str] = []
-    targets: list[str] = []
-    for term, marked in terms:  # explicit locations first, so an unmarked word cannot steal the anchor
-        if marked or _has_location_shape(term):
-            locations.append(term)
-            anchor = anchor or _resolve_landmark(repo, term)
-    for term, marked in terms:
-        if term in locations:
+    targets: list[_Term] = []
+    for t in terms:  # explicit locations first, so an unmarked word cannot steal the anchor
+        if t.marked or _has_location_shape(t.text):
+            locations.append(t.text)
+            anchor = anchor or _resolve_landmark(repo, t.text)
+    for t in terms:
+        if t.text in locations:
             continue
-        landmark = None if anchor else _resolve_landmark(repo, term, strict=True)
+        landmark = None if anchor else _resolve_landmark(repo, t.text, strict=True)
         if landmark:
-            locations.append(term)
+            locations.append(t.text)
             anchor = landmark
         else:
-            targets.append(term)
+            targets.append(t)
 
     if targets:
+        primary = ([t.text for t in targets if _is_dish_word(t.text)]
+                   or [t.text for t in targets if t.shop] or [targets[-1].text])
+        secondary = [t.text for t in targets if t.text not in primary]
         sort = "distance" if anchor else "relevance"
-        lists = [run(t, sort, _TARGET_LIMIT, near=anchor) for t in targets]
-        matched: dict[str, int] = {}
-        first: dict[str, tuple[int, int]] = {}
         place: dict[str, object] = {}
-        for li, hits in enumerate(lists):
-            for pos, p in enumerate(hits):
-                matched[p.id] = matched.get(p.id, 0) + 1
-                first.setdefault(p.id, (li, pos))
+        first: dict[str, tuple[int, int]] = {}
+        hit_count: dict[str, int] = {}
+        for li, term in enumerate(primary):
+            for pos, p in enumerate(run(term, sort, _TARGET_LIMIT, near=anchor)):
                 place.setdefault(p.id, p)
-
-        def key(pid: str):
-            p = place[pid]
-            if anchor:  # nearest first; places without coordinates last
-                dist = p.distance_m if p.distance_m is not None else float("inf")
-                return (-matched[pid], dist, first[pid])
-            in_area = any(loc in (p.addr or "").lower() for loc in locations)
-            return (-matched[pid], not in_area, first[pid])
-
+                first.setdefault(p.id, (li, pos))
+                hit_count[p.id] = hit_count.get(p.id, 0) + 1
         if place:
+            sec_count = {i: 0 for i in place}
+            for term in secondary:
+                for p in run(term, sort, _TARGET_LIMIT, near=anchor):
+                    if p.id in sec_count:
+                        sec_count[p.id] += 1
+            menus = repo.menu_texts(list(place))
+
+            def tier(pid: str) -> int:  # 0 = a primary term is in the title or the menu
+                text = (place[pid].title + " " + menus.get(pid, "")).lower()
+                return 0 if any(t in text for t in primary) else 1
+
+            def key(pid: str):
+                p = place[pid]
+                if anchor:  # nearest first; places without coordinates last
+                    dist = p.distance_m if p.distance_m is not None else float("inf")
+                    return (tier(pid), -hit_count[pid], -sec_count[pid], dist, first[pid])
+                in_area = any(loc in (p.addr or "").lower() for loc in locations)
+                return (tier(pid), -hit_count[pid], -sec_count[pid], not in_area, first[pid])
+
             return [place[i] for i in sorted(place, key=key)[:MAX_PLACES]]
 
     if anchor:
@@ -233,7 +278,7 @@ def _search_places(
         if found:
             return found
     elif terms:
-        found = run(" ".join(t for t, _ in terms))
+        found = run(" ".join(t.text for t in terms))
         if found:
             return found
     # No search terms, or none matched: always hand the model some representative places.
@@ -260,7 +305,7 @@ def _place_line(
 def _retrieve(message: str, repo: PlacesRepo, db: Session, today: date) -> Retrieval:
     cats = _detect_categories(message)
     analyzed = _analyze_terms(message)
-    terms = [t for t, _ in analyzed]
+    terms = [t.text for t in analyzed]
     tags = ["indoor"] if any(w in message for w in INDOOR_WORDS) else []
     want_festival = "festival" in cats
     search_cats = [c for c in cats if c != "festival"]

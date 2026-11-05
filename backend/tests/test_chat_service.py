@@ -380,6 +380,11 @@ def _rows():
                        ("바냉면", 40), ("하연옥", 2.5), ("사냉면", 20)]:
         rows.append((f"f-{title}", "food", title, "물냉면과 비빔냉면", "진주시 어딘가", _LM_LAT + 0.001 * off,
                      _LM_LNG, "물냉면", None))
+    # nearest of all, match only the adjective / only mention 카페 in the overview
+    rows.append(("f-famous", "food", "유명식당", "진주성 앞 유명한 맛있는 집", "진주시 성안", _LM_LAT + 0.00005,
+                 _LM_LNG, "백반", None))
+    rows.append(("f-mention", "food", "한식당", "근처에 카페 많음", "진주시 남강로", _CH_LAT + 0.00005, _CH_LNG,
+                 "백반", None))
     for k in range(3):
         rows.append((f"c-cafe{k}", "food", f"커피{k} 카페", "분위기 좋은 카페", "진주시 남강로",
                      _CH_LAT + 0.001 * (k + 1), _CH_LNG, "커피", None))
@@ -429,6 +434,36 @@ def test_dish_near_landmark_sorted_by_distance(real_like_repo):
 
 def test_cafe_near_landmark_only_cafes(real_like_repo):
     pairs, _ = _titles(real_like_repo, "촉석루 근처 카페")
-    assert [t for _, t in pairs] == ["커피0 카페", "커피1 카페", "커피2 카페"]
+    titles = [t for _, t in pairs]
+    assert titles[:3] == ["커피0 카페", "커피1 카페", "커피2 카페"]  # title matches before overview-only mentions
+    assert titles[3] == "한식당"
     pairs, _ = _titles(real_like_repo, "촉석루에서 가까운 카페")
-    assert len(pairs) == 3 and all("카페" in t for _, t in pairs)
+    assert [t for _, t in pairs][:3] == titles[:3]
+
+
+@pytest.mark.parametrize("msg", ["진주성 근처 유명한 냉면집", "진주성 근처 맛있는 냉면집 추천해줘"])
+def test_adjectives_do_not_widen_dish_filter(real_like_repo, msg):
+    pairs, _ = _titles(real_like_repo, msg)
+    assert [t for _, t in pairs] == ["다냉면", "나냉면", "하연옥", "마냉면", "사냉면", "라냉면"]
+
+
+def test_particle_or_keeps_both_dishes():
+    terms = chat_service._analyze_terms("진주성 근처 냉면이나 국밥")
+    assert [t.text for t in terms] == ["진주성", "냉면", "국밥"]
+
+
+def test_noodle_words_are_targets_and_admin_areas_locations():
+    by = {t.text: t for t in chat_service._analyze_terms("가좌동 근처 볶음면")}
+    assert chat_service._has_location_shape("가좌동") and not chat_service._has_location_shape("볶음면")
+    assert not chat_service._has_location_shape("쫄면") and chat_service._has_location_shape("금곡면")
+    assert by["가좌동"].marked
+
+
+def test_generic_noun_never_anchors(real_like_repo):
+    assert chat_service._resolve_landmark(real_like_repo, "카페") is None
+    assert chat_service._resolve_landmark(real_like_repo, "공원") is None
+
+
+def test_anchor_fallback_when_no_target_hits(real_like_repo):
+    pairs, found = _titles(real_like_repo, "진주성 근처 볶음면")
+    assert pairs and all(_haversine_m(_LM_LAT, _LM_LNG, p.lat, p.lng) <= 3000 for p in found)
