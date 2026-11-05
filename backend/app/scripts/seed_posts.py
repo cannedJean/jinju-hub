@@ -1,11 +1,12 @@
 """Insert demo Jinju reviews (idempotent by title). Usage: python -m app.scripts.seed_posts"""
+import os
+import secrets
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.board import BoardPost
-
-DEMO_PASSWORD = "demo1234"
 
 SEED_POSTS = [
     ("tour", "진주성 야경 산책 후기",
@@ -28,12 +29,18 @@ SEED_POSTS = [
 
 
 def seed(db: Session) -> int:
-    """Insert missing posts; return how many were added."""
+    """Insert missing posts (skipping titles that exist); return how many were added.
+
+    Password: env SEED_POST_PASSWORD, else a random per-run one that is never printed or logged
+    (the seed posts are then effectively locked).
+    """
+    password = os.environ.get("SEED_POST_PASSWORD") or secrets.token_urlsafe(16)
+    hashed = hash_password(password)
     added = 0
     for category, title, content in SEED_POSTS:
         if db.execute(select(BoardPost.id).where(BoardPost.title == title)).first():
             continue
-        db.add(BoardPost(category=category, title=title, content=content, password=hash_password(DEMO_PASSWORD)))
+        db.add(BoardPost(category=category, title=title, content=content, password=hashed))
         added += 1
     db.commit()
     return added

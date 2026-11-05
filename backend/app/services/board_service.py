@@ -8,6 +8,12 @@ from app.models.board import BoardPost
 from app.schemas.board import PostCreate, PostUpdate
 
 
+def _like_pattern(term: str) -> str:
+    """Contains-pattern with LIKE wildcards (% _) and the escape char itself neutralised."""
+    escaped = term.replace("\\", "\\\\").replace("%", "\%").replace("_", "\_")
+    return f"%{escaped}%"
+
+
 def get_posts(db: Session, page: int, size: int, keyword: str | None = None, category: str | None = None):
     query = db.query(BoardPost)
 
@@ -15,8 +21,10 @@ def get_posts(db: Session, page: int, size: int, keyword: str | None = None, cat
         query = query.filter(BoardPost.category == category)
 
     if keyword:
-        like = f"%{keyword}%"
-        query = query.filter(or_(BoardPost.title.ilike(like), BoardPost.content.ilike(like)))
+        like = _like_pattern(keyword)
+        query = query.filter(
+            or_(BoardPost.title.ilike(like, escape="\\"), BoardPost.content.ilike(like, escape="\\"))
+        )
 
     total = query.count()
     items = (
@@ -39,8 +47,8 @@ def search_posts(db: Session, terms: list[str], category: str | None = None, lim
     if cleaned_terms:
         predicates = []
         for term in cleaned_terms:
-            like = f"%{term}%"
-            predicates.extend((BoardPost.title.ilike(like), BoardPost.content.ilike(like)))
+            like = _like_pattern(term)
+            predicates.extend((BoardPost.title.ilike(like, escape="\\"), BoardPost.content.ilike(like, escape="\\")))
         query = query.filter(or_(*predicates))
 
     return query.order_by(BoardPost.created_at.desc(), BoardPost.id.desc()).limit(limit).all()

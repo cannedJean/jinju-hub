@@ -16,7 +16,8 @@ class PostBase(BaseModel):
 
 
 class PostCreate(PostBase):
-    password: str = Field(..., min_length=4, max_length=20)
+    # New posts need >= 6 chars; PostUpdate/PostDelete stay at 4 so older posts remain editable.
+    password: str = Field(..., min_length=6, max_length=20)
 
 
 class PostUpdate(PostBase):
