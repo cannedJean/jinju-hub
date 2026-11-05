@@ -15,6 +15,6 @@ onBeforeUnmount(off)
     class="bg-night-900 text-white text-[13px] font-bold text-center py-1.5 px-4"
     role="status"
   >
-    서버를 깨우는 중… 처음 접속하면 최대 1분쯤 걸려요
+    서버를 깨우는 중… 처음 접속하면 최대 2분쯤 걸려요
   </div>
 </template>

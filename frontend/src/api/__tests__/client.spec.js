@@ -77,4 +77,15 @@ describe('apiClient cold start', () => {
     await apiClient.get('/b')
     expect(calls[1].timeout).toBeLessThanOrEqual(15_000)
   })
+
+  test('a failed wake attempt (503 after retry) resets to the cold path for the next request', async () => {
+    useAdapter([{ data: 1 }])
+    await apiClient.get('/a')
+    const calls = useAdapter([httpErr(503), httpErr(503), { data: 2 }])
+    const p = apiClient.get('/b').catch((e) => e)
+    await vi.runAllTimersAsync()
+    await p
+    await apiClient.get('/c')
+    expect(calls[2].timeout).toBeGreaterThanOrEqual(45_000)
+  })
 })

@@ -66,7 +66,7 @@ const indoorOn = () => props.tags.includes('indoor')
         class="chip__count"
         :title="`지도에 표시되는 장소 ${counts[code]}곳 (위치 정보가 있는 장소만 집계)`"
         :aria-label="`지도 표시 ${counts[code]}곳`"
-        >{{ counts[code] }}</span
+        >지도 {{ counts[code] }}</span
       >
     </button>
 

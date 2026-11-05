@@ -72,6 +72,19 @@ describe('HomeView banner', () => {
 })
 
 describe('HomeView cold-start failure', () => {
+  test('while the first request is pending a neutral loading banner shows, not the fallback', async () => {
+    let resolve
+    fetchFestivals.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    const w = mount(HomeView, { global: { plugins: plugins() } })
+    await flushPromises()
+    expect(w.find('[data-test="festival-loading"]').text()).toContain('축제 정보를 불러오는 중')
+    expect(w.text()).not.toContain('유등축제는 매년 10월')
+    resolve({ items: [], today: '2026-11-04' })
+    await flushPromises()
+    expect(w.find('[data-test="festival-loading"]').exists()).toBe(false)
+    expect(w.text()).toContain('유등축제는 매년 10월')
+  })
+
   test('shows an explicit retry state instead of the fallback banner, and retries', async () => {
     fetchFestivals.mockRejectedValueOnce(new Error('timeout'))
     const w = mount(HomeView, { global: { plugins: plugins() } })

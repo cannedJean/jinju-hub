@@ -4,6 +4,7 @@ import StateView from '../components/StateView.vue'
 import { fetchReport } from '../api/places'
 import { useMetaStore } from '../stores/meta'
 import { categoryLabel } from '../utils/format'
+import { sourceLabel } from '../utils/constants'
 
 const meta = useMetaStore()
 const report = ref(null)
@@ -26,14 +27,14 @@ onMounted(load)
 
 // User-facing source summary (static copy; counts come from the report only).
 const SOURCES = [
-  { key: 'jinju_city.tourinfo', name: '진주시 OpenAPI · 관광지', provider: '진주시', use: '명소·관광지 기본 정보' },
-  { key: 'jinju_city.restaurant', name: '진주시 OpenAPI · 음식점', provider: '진주시', use: '맛집 정보' },
-  { key: 'jinju_city.festival', name: '진주시 OpenAPI · 축제', provider: '진주시', use: '축제·행사 일정' },
-  { key: 'jinju_city.heritage', name: '진주시 OpenAPI · 문화재', provider: '진주시', use: '문화·역사 장소' },
-  { key: 'jinju_city.lodging', name: '진주시 OpenAPI · 숙박', provider: '진주시', use: '숙박 시설' },
-  { key: 'tourapi.area', name: '한국관광공사 TourAPI · 지역 관광정보', provider: '한국관광공사', use: '장소 상세·이미지·좌표 보강' },
-  { key: 'tourapi.festival', name: '한국관광공사 TourAPI · 행사정보', provider: '한국관광공사', use: '축제·행사 보강' },
-]
+  { key: 'jinju_city.tourinfo', provider: '진주시', use: '명소·관광지 기본 정보' },
+  { key: 'jinju_city.restaurant', provider: '진주시', use: '맛집 정보' },
+  { key: 'jinju_city.festival', provider: '진주시', use: '축제·행사 일정' },
+  { key: 'jinju_city.heritage', provider: '진주시', use: '문화·역사 장소' },
+  { key: 'jinju_city.lodging', provider: '진주시', use: '숙박 시설' },
+  { key: 'tourapi.area', provider: '한국관광공사', use: '장소 상세·이미지·좌표 보강' },
+  { key: 'tourapi.festival', provider: '한국관광공사', use: '축제·행사 보강' },
+].map((s) => ({ ...s, name: sourceLabel(s.key) }))
 // Pipeline SourceResult.status values: ok | failed | reused_previous.
 const STATUS_LABEL = { ok: '정상', failed: '실패', reused_previous: '이전 데이터 재사용' }
 

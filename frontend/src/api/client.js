@@ -95,7 +95,9 @@ apiClient.interceptors.response.use(
     const retry = !!config && !config.__retried && String(config.method).toLowerCase() === 'get' && isWakeFailure(error)
     if (!retry) {
       settle(config)
-      if (error?.response) awake = true
+      // A real HTTP answer (not a gateway 502-504 from a sleeping host) proves the server is up;
+      // a failed wake attempt means it may be asleep, so the next request takes the cold path again.
+      awake = !!error?.response && !WAKING_STATUS.has(error.response.status)
       return Promise.reject(error)
     }
     // One automatic retry for idempotent GETs while the server wakes up.

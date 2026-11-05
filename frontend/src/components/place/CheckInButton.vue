@@ -48,11 +48,17 @@ async function checkIn() {
   try {
     const id = props.place.id
     if (demo.value) {
-      const pos = demoPosition(lanterns.demo)
-      const result = canLight(props.place, { lat: pos.lat, lng: pos.lng, accuracy: 0 })
-      if (!result.ok) {
-        message.value = rejectMessage(result)
-        return
+      const { lat, lng } = props.place
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        // Arrival simulation: the virtual pin moves to the place, then the place is lit.
+        lanterns.setDemo({ ...lanterns.demo, pos: { lat, lng } })
+      } else {
+        const pos = demoPosition(lanterns.demo)
+        const result = canLight(props.place, { lat: pos.lat, lng: pos.lng, accuracy: 0 })
+        if (!result.ok) {
+          message.value = rejectMessage(result)
+          return
+        }
       }
       lanterns.light(id, 'demo', props.place)
       await afterLight()

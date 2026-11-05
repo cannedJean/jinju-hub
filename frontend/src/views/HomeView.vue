@@ -58,6 +58,14 @@ watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festiv
         <span>축제 정보를 불러오지 못했어요.</span>
         <button type="button" class="underline" @click="festivals.load()">다시 시도</button>
       </div>
+      <div
+        v-else-if="!festivals.loaded"
+        data-test="festival-loading"
+        class="rounded-xl bg-subtle border border-border px-4 py-3 text-[15px] font-bold text-muted"
+        role="status"
+      >
+        축제 정보를 불러오는 중…
+      </div>
       <router-link
         v-else
         to="/festivals"
