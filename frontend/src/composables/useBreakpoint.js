@@ -1,4 +1,4 @@
-import { onScopeDispose, ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
 
 const DESKTOP_QUERY = '(min-width: 1280px)'
 const TABLET_QUERY = '(min-width: 768px) and (max-width: 1279px)'
@@ -23,6 +23,7 @@ export function useBreakpoint() {
     track(TABLET_QUERY, isTablet),
     track(MOBILE_QUERY, isMobile),
   ]
-  onScopeDispose(() => stops.forEach((stop) => stop()))
+  // Outside a component/effect scope (e.g. unit tests) there is nothing to dispose with.
+  if (getCurrentScope()) onScopeDispose(() => stops.forEach((stop) => stop()))
   return { isDesktop, isTablet, isMobile }
 }

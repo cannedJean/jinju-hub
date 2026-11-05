@@ -16,7 +16,7 @@ import { fetchPost } from '../../api/posts'
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: '/', component: { template: '<div/>' } }, { path: '/explore', name: 'explore', component: { template: '<div/>' } }],
+  routes: [{ path: '/', component: { template: '<div/>' } }, { path: '/explore', name: 'explore', component: { template: '<div/>' } }, { path: '/about/data', component: { template: '<div/>' } }],
 })
 
 describe('WeatherWidget', () => {
@@ -32,6 +32,28 @@ describe('WeatherWidget', () => {
     const w = mount(WeatherWidget, { global: { plugins: [router] } })
     await flushPromises()
     expect(w.find('[data-test="indoor-link"]').exists()).toBe(false)
+  })
+  test.each([
+    ['clear', '☀️'],
+    ['rain-snow', '🌨️'],
+    ['01', '🌥️'], // OpenWeather-style codes are not emitted by the backend -> unknown icon
+    ['', '🌥️'],
+  ])('icon_code %j -> %s', async (code, icon) => {
+    fetchWeather.mockResolvedValue({ recommendation: 'outdoor', temperature: 20, icon_code: code })
+    const w = mount(WeatherWidget, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(w.find('[data-test="weather-icon"]').text()).toBe(icon)
+  })
+})
+
+describe('AppFooter', () => {
+  test('map attribution names OpenStreetMap only (tiles are OSM)', async () => {
+    const { setActivePinia, createPinia } = await import('pinia')
+    setActivePinia(createPinia())
+    const { default: AppFooter } = await import('../layout/AppFooter.vue')
+    const w = mount(AppFooter, { global: { plugins: [router] } })
+    expect(w.text()).toContain('지도 © OpenStreetMap contributors')
+    expect(w.text()).not.toContain('CARTO')
   })
 })
 

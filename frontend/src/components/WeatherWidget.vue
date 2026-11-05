@@ -33,20 +33,11 @@ const WEATHER_ICONS = {
   'rain-snow': '🌨️',
   snow: '❄️',
   unknown: '🌥️',
-  '01': '☀️',
-  '02': '🌤️',
-  '03': '☁️',
-  '04': '☁️',
-  '09': '🌧️',
-  '10': '🌧️',
-  '11': '⛈️',
-  '13': '❄️',
-  '50': '🌫️',
 }
 
 const weatherIcon = computed(() => {
   const code = String(weather.value?.icon_code || '').trim()
-  return WEATHER_ICONS[code] || WEATHER_ICONS[code.slice(0, 2)] || '🌥️'
+  return WEATHER_ICONS[code] || WEATHER_ICONS.unknown
 })
 
 async function loadWeather() {
@@ -99,7 +90,7 @@ onMounted(loadWeather)
       class="flex items-center gap-1.5 md:gap-2 bg-primary-tint rounded-[24px] px-3 md:px-4 py-1.5 border border-selected-border text-primary-strong text-[14px] font-bold whitespace-nowrap"
       :title="`${weather.condition || ''} · ${weather.source || ''}`"
     >
-      <span aria-hidden="true">{{ weatherIcon }}</span>
+      <span aria-hidden="true" data-test="weather-icon">{{ weatherIcon }}</span>
       <span class="md:hidden">{{ temperature || '진주' }}</span>
       <span class="hidden md:inline">진주 {{ temperature }}</span>
       <span v-if="recommendationLabel" :class="props.compact ? 'hidden lg:inline' : 'hidden md:inline'">

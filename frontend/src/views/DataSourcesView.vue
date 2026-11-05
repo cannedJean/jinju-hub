@@ -34,7 +34,8 @@ const SOURCES = [
   { key: 'tourapi.area', name: '한국관광공사 TourAPI · 지역 관광정보', provider: '한국관광공사', use: '장소 상세·이미지·좌표 보강' },
   { key: 'tourapi.festival', name: '한국관광공사 TourAPI · 행사정보', provider: '한국관광공사', use: '축제·행사 보강' },
 ]
-const STATUS_LABEL = { ok: '정상', error: '오류', skipped: '건너뜀', partial: '일부 실패' }
+// Pipeline SourceResult.status values: ok | failed | reused_previous.
+const STATUS_LABEL = { ok: '정상', failed: '실패', reused_previous: '이전 데이터 재사용' }
 
 const sourceRows = computed(() => {
   const byKey = Object.fromEntries((report.value?.sources || []).map((s) => [s.source, s]))
@@ -264,7 +265,7 @@ function fmtTime(iso) {
       <h2 class="text-base font-extrabold text-strong">라이선스 및 이용 안내</h2>
       <p>장소 정보 출처: {{ meta.data?.attribution || '한국관광공사 TourAPI · 진주시 공공데이터' }}</p>
       <p>이미지는 원본 제공처의 라이선스에 따르며, 각 이미지에 출처를 표기합니다.</p>
-      <p>지도 © OpenStreetMap contributors © CARTO</p>
+      <p>지도 © OpenStreetMap contributors</p>
       <p>날씨 정보: 기상청 단기예보. 챗봇 답변은 위 데이터를 바탕으로 하며 실제와 다를 수 있으니 방문 전 운영 여부를 확인해 주세요.</p>
     </div>
   </section>

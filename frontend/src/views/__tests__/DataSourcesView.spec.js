@@ -33,6 +33,27 @@ describe('DataSourcesView', () => {
     expect(w.find('[data-test="pipeline-svg"]').text()).toContain('원본 보존')
   })
 
+  test('labels every backend source status in Korean and credits OSM tiles', async () => {
+    fetchReport.mockResolvedValue({
+      ...report,
+      sources: [
+        { source: 'jinju_city.tourinfo', status: 'ok', records: 12, calls: 2, error: null },
+        { source: 'jinju_city.restaurant', status: 'failed', records: 0, calls: 1, error: 'x' },
+        { source: 'jinju_city.festival', status: 'reused_previous', records: 5, calls: 1, error: 'x' },
+      ],
+    })
+    fetchMeta.mockResolvedValue({ data_version: 'v', generated_at: report.generated_at })
+    const w = mount(DataSourcesView)
+    await flushPromises()
+    const text = w.text()
+    expect(text).toContain('정상')
+    expect(text).toContain('실패')
+    expect(text).toContain('이전 데이터 재사용')
+    expect(text).not.toContain('reused_previous')
+    expect(text).toContain('지도 © OpenStreetMap contributors')
+    expect(text).not.toContain('CARTO')
+  })
+
   test('shows error state when report fails', async () => {
     fetchReport.mockRejectedValue(new Error('x'))
     fetchMeta.mockResolvedValue({ data_version: 'v', generated_at: '' })
