@@ -44,18 +44,18 @@ function submit() {
 
 <template>
   <header
-    class="sticky z-[60] bg-night-900 flex items-center gap-4 px-4 md:px-8"
+    class="sticky z-[60] bg-night-900 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-8"
     :class="[isMobile ? 'h-14 justify-between' : 'h-[72px]', demoOn ? 'top-8' : 'top-0']"
   >
     <router-link
       to="/"
-      class="text-lantern-500 font-extrabold tracking-tight whitespace-nowrap"
+      class="text-lantern-500 font-extrabold tracking-tight whitespace-nowrap shrink-0"
       :class="isMobile ? 'text-[18px]' : 'text-[22px]'"
     >
       JinjuHub<span v-if="!isMobile" class="ml-1.5 text-white/80 font-bold text-[16px]">진주</span>
     </router-link>
 
-    <form v-if="!isMobile" class="flex-1 max-w-[360px]" role="search" @submit.prevent="submit">
+    <form class="flex-1 max-w-[360px] min-w-0" role="search" @submit.prevent="submit">
       <label for="header-search" class="sr-only">장소 검색</label>
       <input
         id="header-search"
@@ -64,7 +64,7 @@ function submit() {
         type="search"
         placeholder="장소, 음식, 축제 검색"
         aria-label="장소 검색"
-        class="w-full rounded-full bg-white/10 text-white placeholder-white/50 px-4 py-2 text-[14px] outline-none focus:bg-white/20"
+        class="w-full rounded-full bg-white/10 text-white placeholder-white/75 px-3 sm:px-4 py-1.5 sm:py-2 text-[13px] sm:text-[14px] outline-none focus:bg-white/20"
       />
     </form>
 
@@ -80,7 +80,7 @@ function submit() {
       </router-link>
     </nav>
 
-    <div class="flex items-center gap-3" :class="{ 'ml-auto': isMobile }">
+    <div class="flex items-center gap-2 sm:gap-3 shrink-0" :class="{ 'ml-auto': !isMobile }">
       <WeatherWidget compact />
       <slot name="lantern-progress">
         <router-link
