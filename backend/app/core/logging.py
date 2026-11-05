@@ -38,8 +38,10 @@ def _mask_args(args):
 class SecretMaskFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if not record.args:
-            if isinstance(record.msg, str):
-                record.msg = mask_secrets(record.msg)
+            text = record.msg if isinstance(record.msg, str) else str(record.msg)
+            masked = mask_secrets(text)
+            if masked != text:
+                record.msg = masked
         else:
             # Masking a %-template could drop its placeholders, so mask args and check the rendered text.
             record.args = _mask_args(record.args)
@@ -48,6 +50,7 @@ class SecretMaskFilter(logging.Filter):
             except Exception:
                 rendered = None
             if rendered is not None and mask_secrets(rendered) != rendered:
+                # Never reached for uvicorn.access records (their full path is masked as one arg).
                 # A secret only appears once msg and args are combined; flatten as a last resort.
                 record.msg = mask_secrets(rendered)
                 record.args = ()

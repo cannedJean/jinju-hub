@@ -104,3 +104,28 @@ def test_secret_split_across_msg_and_args_is_masked():
     record = logging.LogRecord("t", logging.INFO, __file__, 1, "call ?serviceKey=%s&a=1", ("SPLIT123",), None)
     SecretMaskFilter().filter(record)
     assert "SPLIT123" not in record.getMessage()
+
+
+def test_non_str_msg_without_args_is_masked():
+    record = logging.LogRecord("t", logging.ERROR, __file__, 1, Exception("GET ?serviceKey=SNONSTR"), (), None)
+    SecretMaskFilter().filter(record)
+    assert "SNONSTR" not in logging.Formatter("%(message)s").format(record)
+
+
+def test_non_str_arg_object_is_masked_via_fallback():
+    class Url:
+        def __str__(self):
+            return "http://x?authKey=KOBJ"
+
+    record = logging.LogRecord("t", logging.INFO, __file__, 1, "calling %s", (Url(),), None)
+    SecretMaskFilter().filter(record)
+    assert "KOBJ" not in logging.Formatter("%(message)s").format(record)
+
+
+def test_filter_is_idempotent():
+    record = logging.LogRecord("t", logging.INFO, __file__, 1, "u %s", ("?serviceKey=S1",), None)
+    flt = SecretMaskFilter()
+    flt.filter(record)
+    first = record.getMessage()
+    flt.filter(record)
+    assert record.getMessage() == first and "S1" not in first
