@@ -3,7 +3,10 @@ import { defineConfig } from '@playwright/test'
 // Demo rehearsal e2e. Without BASE_URL, Playwright starts the backend (fixture places db + a throwaway
 // SQLite board db) and the Vite dev server. Env goes through the `env` objects (Windows-safe, no
 // inline VAR=x); real environment variables beat backend/.env in pydantic-settings.
-const BASE_URL = process.env.BASE_URL
+// LIVE_URL selects the read-only live smoke (e2e/live-smoke.spec.js) and nothing else; without it the
+// live spec is ignored, so `npx playwright test` keeps running only the fixture specs.
+const LIVE_URL = process.env.LIVE_URL
+const BASE_URL = process.env.BASE_URL ?? LIVE_URL
 const PY = process.env.E2E_PYTHON ?? (process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : '.venv/bin/python')
 // webServer starts before globalSetup, so the stale board db is removed here, before the migration.
 const RESET_DB = `${PY} -c "import pathlib; pathlib.Path('e2e.db').unlink(missing_ok=True)"`
@@ -37,6 +40,7 @@ const browserUse = { permissions: ['geolocation'] }
 
 export default defineConfig({
   testDir: './e2e',
+  ...(LIVE_URL ? { testMatch: /live-smoke\.spec\.js/ } : { testIgnore: /live-smoke\.spec\.js/ }),
   // The flows share one backend board db and run fast enough serially; keeps the demo steps readable.
   fullyParallel: false,
   workers: 1,

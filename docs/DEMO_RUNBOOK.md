@@ -1,10 +1,11 @@
 # 시연 런북
 
 ## 시연 전 (T-10분)
-1. `https://<render-service>.onrender.com/api/health`를 열어 200이 나올 때까지 기다린다 (무료 플랜 콜드스타트 약 50초).
-2. `https://<site>.netlify.app/?demo=1`을 열어 화면 맨 위 가로 전체 주황 배너 `시연 모드`(기준일을 바꾸면 `· 기준일 YYYY-MM-DD`)를 확인한다.
+1. `https://jinjuhub-api.onrender.com/api/health`를 열어 200이 나올 때까지 기다린다 (무료 플랜 콜드스타트 약 50초).
+2. `https://jinju-hub.netlify.app/?demo=1`을 열어 화면 맨 위 가로 전체 주황 배너 `시연 모드`(기준일을 바꾸면 `· 기준일 YYYY-MM-DD`)를 확인한다.
 3. 브라우저 위치 권한은 "허용", 또는 시연 모드의 도착 시뮬레이션을 쓴다.
-4. 챗봇 한 번 호출해 응답 확인 (`ANTHROPIC_API_KEY` 설정 후).
+4. (선택) 읽기 전용 라이브 스모크로 주요 화면 확인: `cd frontend && LIVE_URL=https://jinju-hub.netlify.app npm run e2e:live` (쓰기 없음, desktop + mobile).
+5. 챗봇 한 번 호출해 응답 확인 (`ANTHROPIC_API_KEY` 설정 후).
 
 ## 시연 대본 (e2e `demo-flow`와 동일한 순서)
 1. 공유 링크 `/?demo=1`로 진입 -> 시연 모드.

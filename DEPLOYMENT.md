@@ -10,8 +10,8 @@
 ### 1.1 Neon (DB)
 - 프로젝트 `jinju-hub` (`silent-queen-60966622`, Singapore). **Pooled** 연결 문자열을 `DATABASE_URL`로 쓴다 (`postgresql://...?sslmode=require`).
 - 이 개발 PC는 5432 포트에 닿지 못해 로컬에서 마이그레이션을 못 돌린다. 테이블은 Render 빌드(`alembic upgrade head`)가 만든다.
-- Neon **Data API**(`NEON_DATA_API_URL`, `backend/.env`)는 앱 런타임에서 쓰지 않는다. HTTPS REST이며 JWT가 필요하다.
-  `board_posts`에 비밀번호 해시가 있으므로 **"Grant public schema access"는 끄고**, 노출 테이블을 두지 않는다. 앱은 Render에서 SQLAlchemy로만 접속한다.
+- Neon **Data API**와 **Neon Auth**는 앱이 쓰지 않아 2026-11-05에 비활성화/삭제했다. 앱은 Render에서 SQLAlchemy로만 접속한다.
+  다시 켜려면 `board_posts`(비밀번호 해시)에 RLS를 걸고 공개 grant를 주지 않아야 한다.
 
 ### 1.2 Render (백엔드)
 - Blueprint(`render.yaml`)로 Web Service `jinjuhub-api` 생성: 지역 Singapore, root `backend`, Python, plan free, health check `/api/health`.
@@ -19,18 +19,18 @@
 - 빌드: `pip install -r requirements.txt && alembic upgrade head && python -m app.scripts.seed_posts`
   (무료 플랜은 셸·preDeploy가 없다. 마이그레이션과 시드는 멱등이라 재배포마다 돌아도 안전하다.)
 - 시작: `uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"`
-  (레이트리밋 키는 uvicorn이 고른 IP가 아니라 `app/core/ratelimit.py`의 `client_ip`: Render 프록시가 붙이는 `True-Client-IP` → 없으면 `X-Forwarded-For`의 **마지막** 항목 → 소켓 주소. XFF 맨 앞 값은 클라이언트가 위조할 수 있어 쓰지 않는다.)
+  (레이트리밋 키는 uvicorn이 고른 IP가 아니라 `app/core/ratelimit.py`의 `client_ip`: Render 프록시가 붙이는 `True-Client-IP` → 없으면 `X-Forwarded-For`의 **마지막** 항목 → 소켓 주소. XFF 맨 앞 값은 클라이언트가 위조할 수 있어 쓰지 않는다. Render에서는 XFF의 마지막 hop이 Cloudflare 엣지 IP라서 `True-Client-IP`를 우선하며, 이 헤더는 Render 프록시가 덮어쓴다(2026-11-05 라이브 검증, §4).)
 - 시크릿 입력(`sync: false`): `DATABASE_URL`, `WEATHER_API_KEY`, `ALLOWED_ORIGINS`(처음엔 비워 두거나 임시값). `ANTHROPIC_API_KEY`는 마지막 챗봇 테스트 때 추가.
-- 확인: `https://<render-service>.onrender.com/api/health` 200.
+- 확인: `https://jinjuhub-api.onrender.com/api/health` 200 (`{"status":"ok","data_version":...}`). 지역 Singapore. 게시판은 빌드의 alembic + 시드로 Neon에 시드 글 8개가 들어 있다.
 
 ### 1.3 Netlify (프론트)
 - GitHub 저장소 `https://github.com/cannedJean/jinju-hub` 연결. **Base directory = `frontend`** (UI에서 설정; `frontend/netlify.toml`에는 build `npm run build`, publish `dist`, SPA redirect, `NODE_VERSION=20`).
-- 환경변수 `VITE_API_BASE_URL=https://<render-service>.onrender.com` (**`/api` 제외**, 끝 슬래시 없음).
+- 환경변수 `VITE_API_BASE_URL=https://jinjuhub-api.onrender.com` (**`/api` 제외**, 끝 슬래시 없음).
 - 배포 브랜치는 Render와 동일(지금 `feat/jinjuhub-mvp`, 병합 후 `main`).
 
 ### 1.4 CORS 마무리
-- Render `ALLOWED_ORIGINS`에 Netlify 주소(`https://<site>.netlify.app`, **끝 슬래시 없음**)를 넣고 재배포.
-  - 최종 값: `TODO(controller): 사용자가 알려 준 Netlify URL`
+- Render `ALLOWED_ORIGINS`에 Netlify 주소(`https://jinju-hub.netlify.app`, **끝 슬래시 없음**)를 넣고 재배포.
+  - 최종 값: `https://jinju-hub.netlify.app` (CORS 검증 완료)
 
 ## 2. 환경변수 표
 
@@ -55,13 +55,23 @@
 - 시크릿 `DATA_GO_KR_KEY` 등록 필요 (Settings > Secrets and variables > Actions).
 
 ## 4. 배포 검증
-- 라이브 e2e: `cd frontend && BASE_URL=https://<site>.netlify.app npx playwright test --project=desktop --project=mobile` (`BASE_URL`이 있으면 로컬 webServer를 띄우지 않는다).
-  - 결과: `TODO(controller): 라이브 e2e 결과`
-- 레이트리밋 위조 방지 확인 (부작용 없음: 없는 글 삭제 시도라 404만 쌓인다). `X-Forwarded-For` 맨 앞 값을 매번 바꿔도 11번째가 `429`여야 한다. 모두 `404`면 키가 위조 가능한 상태다.
+- 라이브 스모크(읽기 전용, 쓰기 없음): `cd frontend && LIVE_URL=https://jinju-hub.netlify.app npm run e2e:live` (desktop + mobile, 콜드스타트 대비로 `/api/health`를 먼저 워밍한다). 픽스처 e2e는 라이브에서 돌리지 않는다(글 작성 등 쓰기가 있음).
+  - 결과: 2026-11-05 desktop + mobile 12/12 통과 (홈 히어로, 탐색 지도+카드, 장소 상세, 축제, 데이터 출처 리포트 카드 4개, 게시판 시드 글 목록)
+- 레이트리밋 위조 방지 확인 (부작용 없음: 없는 글 삭제 시도라 404만 쌓인다). 헤더를 매번 바꿔도 11번째가 `429`여야 한다. 모두 `404`면 키가 위조 가능한 상태다. 각 루프 사이에 1분 이상 기다린다.
   ```bash
-  for i in $(seq 1 11); do curl -s -o /dev/null -w "%{http_code} " -X DELETE https://<render-service>.onrender.com/api/posts/999999 -H "Content-Type: application/json" -H "X-Forwarded-For: 203.0.113.$i" -d '{"password":"xxxx"}'; done; echo
-  # 기대: 404 ×10 다음 429 (RATE_LIMIT=10/minute). 1분 뒤 다시 404.
+  API=https://jinjuhub-api.onrender.com
+  for H in X-Forwarded-For True-Client-IP CF-Connecting-IP; do
+    echo "$H:"
+    for i in $(seq 1 11); do curl -s -o /dev/null -w "%{http_code} " -X DELETE $API/api/posts/987654321 -H "Content-Type: application/json" -H "$H: 203.0.113.$i" -d '{"password":"xxxx"}'; done; echo
+  done
   ```
+  라이브 결과 (2026-11-05):
+  | 위조 헤더 | 결과 | 해석 |
+  |---|---|---|
+  | `X-Forwarded-For` | 404 ×10 → 429 | 위조 무효 (마지막 hop/True-Client-IP 사용) |
+  | `True-Client-IP` | 404 ×10 → 429 | Render/Cloudflare가 값을 덮어쓴다 |
+  | `CF-Connecting-IP` | 403 ×11 | Cloudflare 엣지가 앱에 닿기 전에 거부 |
+  기대: 앞의 둘은 404 ×10 다음 429 (`RATE_LIMIT=10/minute`), 1분 뒤 다시 404.
 - 수동 확인: 게시글 작성 → Render "Manual Deploy"로 재배포 → 글 유지(원격 저장), 실기기에서 HTTPS 위치 권한 프롬프트, 챗봇 실답변(장소 출처 포함).
 
 ## 5. 콜드스타트 주의

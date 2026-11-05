@@ -16,8 +16,14 @@ JinjuHub/
 
 ## 배포
 
-- 사이트: `TODO(controller): https://<site>.netlify.app` · API: `TODO(controller): https://<render-service>.onrender.com/api/health`
-- 스크린샷(3장): `TODO(controller)` — 탐색 지도 / 상세 · 담기 / 내 유등
+- 사이트(Netlify): https://jinju-hub.netlify.app
+- API(Render, 무료 플랜이라 첫 요청은 콜드스타트 약 50초): https://jinjuhub-api.onrender.com/api/health
+- 배포 절차와 검증: [DEPLOYMENT.md](DEPLOYMENT.md), 시연: [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
+
+| 탐색 (데스크톱) | 탐색 (모바일) | 장소 상세 (데스크톱) |
+|---|---|---|
+| ![탐색 데스크톱](docs/screenshots/explore-desktop.png) | ![탐색 모바일](docs/screenshots/explore-mobile.png) | ![장소 상세](docs/screenshots/detail-desktop.png) |
+
 - 지도 타일은 OSM 기본이며 `VITE_TILE_URL` / `VITE_TILE_URL_DARK`로 덮어쓸 수 있다.
 
 ## 아키텍처
