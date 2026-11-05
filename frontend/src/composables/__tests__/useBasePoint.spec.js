@@ -3,6 +3,7 @@ import { computed, effectScope, ref } from 'vue'
 import { useBasePoint } from '../useBasePoint'
 import { parseQuery } from '../useExploreQuery'
 import { useLanternsStore } from '../../stores/lanterns'
+import { DEMO_START } from '../../utils/geo'
 
 // Runs the composable inside an effect scope (stand-in for a component) with a fake URL state.
 function setup({ query = {}, geolocation } = {}) {
@@ -113,6 +114,15 @@ describe('useBasePoint', () => {
     api.locate()
     expect(geo.calls).toHaveLength(0)
     expect(lanterns.base).toMatchObject({ lat: 35.18, lng: 128.09, label: '가상 내 위치' })
+  })
+
+  test('demo mode with no dragged pin still uses the displayed default pin (촉석루), not GPS', () => {
+    const geo = fakeGeo()
+    const { api, lanterns } = setup({ geolocation: geo })
+    lanterns.setDemo({ enabled: true, today: null, pos: null })
+    api.locate()
+    expect(geo.calls).toHaveLength(0)
+    expect(lanterns.base).toMatchObject({ lat: DEMO_START.lat, lng: DEMO_START.lng, label: '가상 내 위치' })
   })
 
   test('a position arriving after unmount is ignored (no navigation, base untouched)', () => {

@@ -84,9 +84,9 @@ function submit() {
           to="/lanterns"
           class="text-lantern-500 font-bold text-[14px] whitespace-nowrap"
           data-test="lantern-progress"
-          :aria-label="`유등 30선 진행도 ${progress}/${total}, 내 유등 보기`"
+          :aria-label="collection.loaded ? `유등 30선 진행도 ${progress}/${total}, 내 유등 보기` : '유등 30선 진행도를 불러오지 못했어요, 내 유등 보기'"
         >
-          <span aria-hidden="true">◆ {{ progress }}/{{ total }}</span>
+          <span aria-hidden="true">◆ {{ collection.loaded ? progress : '–' }}/{{ total }}</span>
         </router-link>
       </slot>
     </div>

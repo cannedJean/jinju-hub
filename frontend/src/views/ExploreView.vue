@@ -14,11 +14,10 @@ import { useBasePoint } from '../composables/useBasePoint'
 import { searchState, toApiParams, toQuery, useExploreQuery } from '../composables/useExploreQuery'
 import { useLanternsStore } from '../stores/lanterns'
 import { mergeUserMarkers, useMarkersStore } from '../stores/markers'
-import { bboxToPoints, haversineMeters, radiusFitPoints } from '../utils/geo'
+import { bboxToPoints, demoPosition, haversineMeters, radiusFitPoints } from '../utils/geo'
 import { formatRadius } from '../utils/format'
 
 const SHEET_COLLAPSED_PX = 96
-const DEMO_START = { lat: 35.1897, lng: 128.0819 } // 촉석루
 const MAP_DARK_KEY = 'jinjuhub.mapDark'
 
 const route = useRoute()
@@ -315,9 +314,7 @@ const heading = computed(() => (state.value.q ? `‘${state.value.q}’ 검색 �
 const indoorRecommended = ref(false)
 
 // ---------- demo mode virtual position ----------
-const virtualPos = computed(() =>
-  lanterns.demo.enabled ? (hasCoords(lanterns.demo.pos) ? lanterns.demo.pos : DEMO_START) : null,
-)
+const virtualPos = computed(() => demoPosition(lanterns.demo))
 function onMoveVirtual(pos) {
   lanterns.setDemo({ ...lanterns.demo, pos })
 }

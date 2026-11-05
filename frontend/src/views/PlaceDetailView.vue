@@ -1,4 +1,5 @@
 <script setup>
+import { sourceLabel } from '../utils/constants'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchPlace } from '../api/places'
@@ -148,7 +149,7 @@ function removeTombstone() {
             <p>출처: 한국관광공사 TourAPI · 진주시 공공데이터</p>
             <ul v-if="sources.length" class="mt-1 flex flex-wrap gap-x-3">
               <li v-for="s in sources" :key="s.source + s.source_url">
-                <a :href="s.href" target="_blank" rel="noopener noreferrer" class="underline">{{ s.source }} 원문</a>
+                <a :href="s.href" target="_blank" rel="noopener noreferrer" class="underline">{{ sourceLabel(s.source) }} 원문</a>
               </li>
             </ul>
           </footer>

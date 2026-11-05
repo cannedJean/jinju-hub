@@ -1,12 +1,13 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { encodeShare } from '../../utils/share'
+import { SHARE_MAX_IDS, capShareIds, encodeShare } from '../../utils/share'
 
 const props = defineProps({ ids: { type: Array, default: () => [] } })
 const emit = defineEmits(['close'])
 
 const input = ref(null)
 const copied = ref('')
+const shared = computed(() => capShareIds(props.ids))
 const url = computed(() => `${window.location.origin}/lanterns?share=${encodeShare(props.ids)}`)
 
 onMounted(async () => {
@@ -47,7 +48,10 @@ function onKeydown(e) {
   <div class="share-backdrop" @click.self="emit('close')">
     <div class="share-dialog" role="dialog" aria-modal="true" aria-labelledby="share-title" @keydown="onKeydown">
       <h2 id="share-title" class="text-lg font-extrabold text-strong">내 목록 공유</h2>
-      <p class="mt-1 text-[13px] text-muted">이 링크를 받은 사람은 담은 장소 {{ ids.length }}곳을 읽기 전용으로 볼 수 있어요.</p>
+      <p class="mt-1 text-[13px] text-muted">이 링크를 받은 사람은 담은 장소 {{ shared.length }}곳을 읽기 전용으로 볼 수 있어요.</p>
+      <p v-if="shared.length < ids.length" class="mt-1 text-[13px] font-bold text-strong" data-test="share-cap-note">
+        링크 하나에는 최근 {{ SHARE_MAX_IDS }}곳까지만 담겨요. (전체 {{ ids.length }}곳 중 {{ shared.length }}곳)
+      </p>
       <input ref="input" class="share-input" type="text" readonly :value="url" aria-label="공유 링크" />
       <p v-if="copied" class="text-[13px] text-muted" role="status">{{ copied }}</p>
       <div class="mt-3 flex justify-end gap-2">

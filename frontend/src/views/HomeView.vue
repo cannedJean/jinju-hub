@@ -25,9 +25,12 @@ const banner = computed(() => {
   return `유등축제는 매년 10월${label ? ` · ${label}` : ''}`
 })
 
+function loadCollection() {
+  collection.load().catch(() => {})
+}
 onMounted(() => {
   festivals.load()
-  collection.load().catch(() => {})
+  loadCollection()
 })
 watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festivals.load())
 </script>
@@ -46,7 +49,17 @@ watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festiv
     </section>
 
     <div class="max-w-[1200px] mx-auto px-4 md:px-8 py-8 space-y-8">
+      <div
+        v-if="festivals.error && !festivals.loaded"
+        data-test="festival-error"
+        class="flex items-center justify-between gap-3 rounded-xl bg-subtle border border-border px-4 py-3 text-[15px] font-bold text-strong"
+        role="alert"
+      >
+        <span>축제 정보를 불러오지 못했어요.</span>
+        <button type="button" class="underline" @click="festivals.load()">다시 시도</button>
+      </div>
       <router-link
+        v-else
         to="/festivals"
         data-test="festival-banner"
         class="block rounded-xl bg-primary-tint border border-selected-border px-4 py-3 text-[15px] font-bold text-primary-strong"
@@ -61,11 +74,15 @@ watch([() => lanterns.effectiveToday, () => lanterns.demo.enabled], () => festiv
         </section>
         <router-link to="/lanterns" class="bg-card border border-border rounded-xl p-4 block" data-test="progress-card">
           <h2 class="text-[15px] font-extrabold text-strong">유등 30선 진행도</h2>
-          <p class="mt-2 text-[24px] font-extrabold text-lantern-500">◆ {{ progress }}/{{ total }}</p>
+          <p class="mt-2 text-[24px] font-extrabold text-lantern-500">◆ {{ collection.loaded ? progress : '–' }}/{{ total }}</p>
           <div class="mt-2 h-2 rounded-full bg-subtle overflow-hidden">
-            <div class="h-full bg-lantern-500" :style="{ width: (progress / total) * 100 + '%' }"></div>
+            <div class="h-full bg-lantern-500" :style="{ width: (collection.loaded ? (progress / total) * 100 : 0) + '%' }"></div>
           </div>
         </router-link>
+        <div v-if="collection.error && !collection.loaded" class="md:col-span-2 text-[13px] text-muted" data-test="progress-error" role="alert">
+          진행도를 불러오지 못했어요.
+          <button type="button" class="underline font-bold" @click="loadCollection">다시 시도</button>
+        </div>
       </div>
 
       <section v-if="jinju8.length">

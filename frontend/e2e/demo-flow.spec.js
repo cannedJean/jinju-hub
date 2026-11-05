@@ -11,6 +11,15 @@ test('demo script: explore -> lodging radius -> save -> demo check-in -> badge -
 }, testInfo) => {
   const mobile = isMobile(testInfo)
   await context.setGeolocation(LODGING)
+  // Demo mode treats the virtual pin (default 촉석루) as the user's position, not GPS: park the pin at the lodging.
+  await context.addInitScript((pos) => {
+    if (!localStorage.getItem('jinjuhub.lanterns.v1')) {
+      localStorage.setItem(
+        'jinjuhub.lanterns.v1',
+        JSON.stringify({ version: 1, items: {}, base: null, demo: { enabled: true, today: null, pos }, earnedBadges: {} }),
+      )
+    }
+  }, { lat: LODGING.latitude, lng: LODGING.longitude })
 
   // 1. Demo mode from the shared link.
   await page.goto('/?demo=1')

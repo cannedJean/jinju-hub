@@ -67,11 +67,18 @@ describe('CheckInButton', () => {
     expect(useLanternsStore().isLit('p1')).toBe(false)
   })
 
-  test('demo mode without virtual pin lights without geolocation', async () => {
+  test('demo mode without a dragged pin checks against the default pin (촉석루) and never reads GPS', async () => {
     const spy = mockGeo(ok(0, 0, 1))
     const lanterns = useLanternsStore()
     lanterns.setDemo({ enabled: true })
-    const w = mount(CheckInButton, { props: { place } })
+    const far = { id: 'p-far', title: '먼 곳', category: 'sight', lat: 35.25, lng: 128.2 }
+    const wFar = mount(CheckInButton, { props: { place: far } })
+    await click(wFar)
+    expect(spy).not.toHaveBeenCalled()
+    expect(wFar.text()).toContain('떨어져 있어요')
+    expect(lanterns.isLit('p-far')).toBe(false)
+
+    const w = mount(CheckInButton, { props: { place: { ...place, lat: 35.1898, lng: 128.0820 } } })
     expect(w.text()).toContain('도착 시뮬레이션')
     expect(w.text()).toContain('시연 모드')
     await click(w)

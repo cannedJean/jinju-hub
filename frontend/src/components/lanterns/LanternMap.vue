@@ -18,7 +18,7 @@ const markers = computed(() =>
 )
 const savedIds = computed(() => new Set(usable.value.map((it) => it.id)))
 const litIds = computed(() => new Set(usable.value.filter((it) => it.litAt).map((it) => it.id)))
-const fitTo = computed(() => (usable.value.length ? usable.value.map((it) => [it.lat, it.lng]) : null))
+const fitTo = computed(() => (usable.value.length ? usable.value.map((it) => ({ lat: it.lat, lng: it.lng })) : null))
 
 const detailHref = (id) => router.resolve({ name: 'place', params: { id } }).href
 const open = (id) => router.push({ name: 'place', params: { id } })

@@ -16,6 +16,21 @@ export function getCategoryColor(id) {
   return POST_CATEGORY_MAP.get(id)?.color || 'cat-badge-free'
 }
 
+// Pipeline source keys (place_images.source / place_sources.source) -> user-facing names.
+export const SOURCE_LABELS = {
+  'jinju_city.tourinfo': '진주시 관광정보',
+  'jinju_city.restaurant': '진주시 음식점 정보',
+  'jinju_city.festival': '진주시 축제 정보',
+  'jinju_city.heritage': '진주시 문화재 정보',
+  'jinju_city.lodging': '진주시 숙박 정보',
+  'tourapi.area': '한국관광공사 지역 관광정보',
+  'tourapi.festival': '한국관광공사 행사정보',
+}
+
+export function sourceLabel(key) {
+  return SOURCE_LABELS[key] || key || ''
+}
+
 function pad(value) {
   return String(value).padStart(2, '0')
 }

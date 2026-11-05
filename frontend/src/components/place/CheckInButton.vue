@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { canLight, getPosition } from '../../utils/checkin'
 import { formatDistance } from '../../utils/format'
+import { demoPosition } from '../../utils/geo'
 import { useLanternsStore } from '../../stores/lanterns'
 import { useCollectionStore } from '../../stores/collection'
 
@@ -47,13 +48,11 @@ async function checkIn() {
   try {
     const id = props.place.id
     if (demo.value) {
-      const pos = lanterns.demo.pos
-      if (pos) {
-        const result = canLight(props.place, { lat: pos.lat, lng: pos.lng, accuracy: 0 })
-        if (!result.ok) {
-          message.value = rejectMessage(result)
-          return
-        }
+      const pos = demoPosition(lanterns.demo)
+      const result = canLight(props.place, { lat: pos.lat, lng: pos.lng, accuracy: 0 })
+      if (!result.ok) {
+        message.value = rejectMessage(result)
+        return
       }
       lanterns.light(id, 'demo', props.place)
       await afterLight()

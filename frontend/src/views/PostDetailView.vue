@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import StateView from '../components/StateView.vue'
 import { fetchPost, deletePost } from '../api/posts'
@@ -130,7 +130,14 @@ async function confirmAction() {
   }
 }
 
-onMounted(loadData)
+// Reload when the same route record is reused for another post (e.g. a chat source link).
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id !== undefined && route.name === 'post') loadData()
+  },
+  { immediate: true },
+)
 onUnmounted(() => {
   document.body.style.overflow = ''
 })

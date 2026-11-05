@@ -2,11 +2,24 @@ const MAX_IDS = 100
 const MAX_INPUT = 4096
 const ID_RE = /^jh-[A-Za-z0-9_-]{1,64}$/
 
-export function encodeShare(ids) {
-  const bytes = new TextEncoder().encode((ids || []).join(','))
+export const SHARE_MAX_IDS = MAX_IDS
+
+function toToken(ids) {
+  const bytes = new TextEncoder().encode(ids.join(','))
   let bin = ''
   for (const b of bytes) bin += String.fromCharCode(b)
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// The ids a link can really carry: the newest MAX_IDS that also fit the decoder's input limit.
+export function capShareIds(ids) {
+  const out = (ids || []).slice(0, MAX_IDS)
+  while (out.length > 1 && toToken(out).length > MAX_INPUT) out.pop()
+  return out
+}
+
+export function encodeShare(ids) {
+  return toToken(capShareIds(ids))
 }
 
 export function decodeShare(s) {

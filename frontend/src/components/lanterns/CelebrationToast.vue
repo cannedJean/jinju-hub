@@ -1,7 +1,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useCollectionStore } from '../../stores/collection'
-import { useLanternsStore } from '../../stores/lanterns'
+import { isRestoring, useLanternsStore } from '../../stores/lanterns'
 
 // Rendered once globally. Consumes collection.newlyEarned (badge modal) and announces the first light.
 const collection = useCollectionStore()
@@ -20,11 +20,16 @@ function showToast(text) {
 }
 onBeforeUnmount(() => clearTimeout(timer))
 
+// Sync flush: runs inside light()/restore(), before checkBadges() records the badge. An undo of a
+// removal (restore) or a re-light after the badge was already earned is not a first light.
 watch(
   () => lanterns.litCount,
   (n, prev) => {
-    if (n === 1 && prev === 0) showToast('첫 유등을 밝혔어요!')
+    if (n === 1 && prev === 0 && !isRestoring() && !lanterns.earnedBadges.first_light) {
+      showToast('첫 유등을 밝혔어요!')
+    }
   },
+  { flush: 'sync' },
 )
 
 watch(

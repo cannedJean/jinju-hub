@@ -1,6 +1,6 @@
 import { computed, onScopeDispose, ref } from 'vue'
 import { useLanternsStore } from '../stores/lanterns'
-import { haversineMeters, inJinjuBounds } from '../utils/geo'
+import { demoPosition, haversineMeters, inJinjuBounds } from '../utils/geo'
 import { formatDistance } from '../utils/format'
 
 export const DEFAULT_RADIUS = 1000
@@ -90,8 +90,9 @@ export function useBasePoint({ state, update, onBaseSet, geolocation = defaultGe
   function locate() {
     if (disposed) return
     message.value = ''
-    if (lanterns.demo.enabled && hasCoords(lanterns.demo.pos)) {
-      setBase({ ...lanterns.demo.pos, label: '가상 내 위치' })
+    const virtual = demoPosition(lanterns.demo)
+    if (virtual) {
+      setBase({ lat: virtual.lat, lng: virtual.lng, label: '가상 내 위치' })
       return
     }
     if (!geolocation) {
