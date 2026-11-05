@@ -154,12 +154,12 @@ def _add_tags(p: Place, tags: list[str]) -> None:
 def _apply_tags(places: list[Place], spec: dict, unresolved: list[str]) -> None:
     defaults = spec.get("category_defaults") or {}
     keywords = spec.get("keyword_tags") or {}
+    excludes = spec.get("keyword_excludes") or {}  # tag -> title words that veto it (manual entries still win)
     for p in places:
-        _add_tags(p, defaults.get(p.category, []))
+        found = list(defaults.get(p.category, []))
         text = f"{p.title} {p.menu or ''}"
-        for tag, words in keywords.items():
-            if any(w in text for w in words):
-                _add_tags(p, [tag])
+        found += [tag for tag, words in keywords.items() if any(w in text for w in words)]
+        _add_tags(p, [t for t in found if not any(w in p.title for w in excludes.get(t, []))])
     for entry in spec.get("manual", []):
         p = find_place(places, entry["match"])
         if p is None:

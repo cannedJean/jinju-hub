@@ -126,3 +126,68 @@ def test_operational_jinju8_fallbacks_and_venues_are_clean(repo_root):
         assert "근사" not in item["fallback"]["overview"] and "(" not in item["fallback"]["overview"]
     for prog in c["festival_programs"]["items"]:
         assert all(v.get("category") for v in prog["venues"])  # never match festival rows themselves
+
+
+# ---- operational tags.yaml: indoor only for museum-type rows (review finding C18) ----
+
+NOT_INDOOR_WORDS = ("묘", "비석", "석탑", "봉수대", "고분", "화석산지")
+
+
+def _p(i, title, category, **kw):
+    from jinju_pipeline.merge import normalize_name
+    from jinju_pipeline.models import Place
+
+    return Place(id=f"jh-t{i}", category=category, title=title, title_norm=normalize_name(title),
+                 geo_status="ok", lat=35.18, lng=128.1, updated_at="2026-11-04", **kw)
+
+
+def _operational_tags(repo_root):
+    return {"tags": load_curation(repo_root / "pipeline" / "curation")["tags"]}
+
+
+@pytest.mark.parametrize("title, category", [
+    ("국립진주박물관", "culture"),
+    ("진주남강유등전시관", "culture"),
+    ("진주시립이성자미술관", "culture"),
+    ("진주익룡발자국전시관", "sight"),
+    ("향토민속관", "culture"),
+    ("유등체험관", "culture"),
+    ("진주목공예전수관", "culture"),
+    ("경남수학문화관 진주수학체험센터", "culture"),
+    ("OO과학관", "culture"),
+    ("OO기념관", "culture"),
+])
+def test_operational_tags_indoor_for_museum_type_rows(repo_root, title, category):
+    p = apply_curation([_p(1, title, category)], _operational_tags(repo_root)).places[0]
+    assert "indoor" in p.tags
+
+
+@pytest.mark.parametrize("title", [
+    "성재처사김해허공휘관지묘(誠齋處士金海許公諱寬之墓)",
+    "전의관김공정식시혜불망비(前議官金公正植施惠不忘碑)",
+    "관찰사조공시영청덕선정비(觀察使曺公始永淸德善政碑)",
+    "진주 묘엄사지 삼층석탑",
+    "망진산 봉수대",
+    "진주 OO 비석군",
+    "진주 OO리 고분군",
+    "진주 정촌면 뿌리산단 공룡 화석산지",
+    "진주 문산성당(晋州 文山聖堂)",
+    "박효근 효행관련고문서(朴孝根 孝行關聯古文書)",
+])
+def test_operational_tags_no_blanket_indoor_for_culture(repo_root, title):
+    p = apply_curation([_p(1, title, "culture")], _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags
+
+
+def test_operational_tags_exhibition_keyword_does_not_hit_place_names(repo_root):
+    p = apply_curation([_p(1, "초전시민체육공원", "sight")], _operational_tags(repo_root)).places[0]
+    assert "indoor" not in p.tags and "outdoor" in p.tags
+
+
+def test_operational_tags_never_mark_outdoor_heritage_indoor(repo_root):
+    """Contract: even a museum-type word in the title cannot make a tomb/stele/pagoda/fossil site indoor."""
+    titles = ["OO박물관 앞 석탑", "OO기념관 묘역", "화석산지 전시관 터", "OO 고분 전시", "봉수대 기념관 비석"]
+    places = [_p(i, t, "culture") for i, t in enumerate(titles)]
+    for p in apply_curation(places, _operational_tags(repo_root)).places:
+        if any(w in p.title for w in NOT_INDOOR_WORDS):
+            assert "indoor" not in p.tags, p.title

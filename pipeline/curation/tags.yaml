@@ -1,10 +1,15 @@
+# indoor는 카테고리 기본값이 아니다: culture에는 진주시 문화재(묘·비석·석탑·봉수대·고분·화석산지 등 야외 유적)가
+# 대부분이라, 박물관류 이름(아래 keyword_tags)인 실내 시설에만 붙인다. "전시" 단독은 쓰지 않는다
+# ("초전시민체육공원"처럼 지명에 걸린다) — 전시관·전시장·전시실만.
 category_defaults:
-  culture: [indoor]
   sight: [outdoor]
   leisure: [outdoor]
 keyword_tags:   # 제목 + 메뉴에서 부분 일치
   local_food: ["냉면", "비빔밥", "장어", "헛제사밥"]
-  indoor: ["박물관", "전시관", "미술관", "기념관"]
+  indoor: ["박물관", "전시관", "전시장", "전시실", "미술관", "기념관", "과학관", "체험관", "문화관", "민속관", "전수관", "교육관",
+           "홍보관", "기록관", "문학관", "역사관", "예술관", "예술회관", "도서관"]
+keyword_excludes:   # 제목에 이 말이 있으면 그 태그를 붙이지 않는다(기본값·키워드 모두; manual은 예외)
+  indoor: ["묘", "비석", "석탑", "봉수대", "고분", "화석산지"]
 manual:         # 가장 가까운 일치 장소 1곳에 태그 부여 (근거: 진주시 API 개요 문구)
   - {match: {title_contains: 촉석루, category: sight, near: [35.1895, 128.0819], within_m: 300}, tags: [night_view]}
   - {match: {title_contains: 진주성, category: sight, near: [35.1895, 128.0800], within_m: 300}, tags: [night_view]}
