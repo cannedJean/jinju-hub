@@ -42,7 +42,7 @@ function openDemo() {
 <template>
   <div
     v-if="moreOpen"
-    class="fixed inset-0 z-[59] bg-black/40"
+    class="fixed inset-0 z-[110] bg-black/40"
     data-test="more-backdrop"
     @click="closeMore"
   ></div>
@@ -52,7 +52,7 @@ function openDemo() {
     ref="sheet"
     role="menu"
     aria-label="더보기"
-    class="fixed bottom-14 inset-x-0 z-[61] bg-night-900 text-white rounded-t-2xl p-2 shadow-xl"
+    class="fixed bottom-14 inset-x-0 z-[120] bg-night-900 text-white rounded-t-2xl p-2 shadow-xl"
     @keydown.esc="closeMore"
   >
     <router-link
