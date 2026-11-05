@@ -6,13 +6,11 @@ import { defineConfig } from '@playwright/test'
 const BASE_URL = process.env.BASE_URL
 const PY = process.env.E2E_PYTHON ?? (process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : '.venv/bin/python')
 // webServer starts before globalSetup, so the stale board db is removed here, before the migration.
-// --no-access-log: the backend's secret-mask log filter clears record.args, which uvicorn's access
-// formatter cannot format (a 'Logging error' traceback per request); app request logs still print.
 const RESET_DB = `${PY} -c "import pathlib; pathlib.Path('e2e.db').unlink(missing_ok=True)"`
 
 const servers = [
   {
-    command: `${RESET_DB} && ${PY} -m alembic upgrade head && ${PY} -m uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log`,
+    command: `${RESET_DB} && ${PY} -m alembic upgrade head && ${PY} -m uvicorn main:app --host 127.0.0.1 --port 8000`,
     cwd: '../backend',
     url: 'http://127.0.0.1:8000/api/health',
     env: {

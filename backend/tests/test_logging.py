@@ -68,3 +68,39 @@ def test_exc_info_traceback_is_masked():
     assert "RuntimeError" in out and "Traceback" in out
     for s in ("SECRETA", "SECRETB", "SECRETC"):
         assert s not in out
+
+
+def _uvicorn_access_record(full_path):
+    return logging.LogRecord(
+        "uvicorn.access", logging.INFO, __file__, 1,
+        '%s - "%s %s HTTP/%s" %d', ("127.0.0.1:5000", "GET", full_path, "1.1", 200), None,
+    )
+
+
+def _format_access(record):
+    from uvicorn.logging import AccessFormatter
+
+    fmt = AccessFormatter(fmt='%(client_addr)s - "%(request_line)s" %(status_code)s')
+    return fmt.format(record)
+
+
+def test_uvicorn_access_log_formats_without_error():
+    record = _uvicorn_access_record("/api/health")
+    SecretMaskFilter().filter(record)
+    out = _format_access(record)
+    assert "/api/health" in out and "200" in out
+
+
+def test_uvicorn_access_log_masks_query_secret():
+    record = _uvicorn_access_record("/x?serviceKey=SECRET123&a=1")
+    SecretMaskFilter().filter(record)
+    assert isinstance(record.args, tuple) and len(record.args) == 5
+    out = _format_access(record)
+    assert "SECRET123" not in out
+    assert "serviceKey=***" in out and "a=1" in out
+
+
+def test_secret_split_across_msg_and_args_is_masked():
+    record = logging.LogRecord("t", logging.INFO, __file__, 1, "call ?serviceKey=%s&a=1", ("SPLIT123",), None)
+    SecretMaskFilter().filter(record)
+    assert "SPLIT123" not in record.getMessage()

@@ -26,10 +26,31 @@ def mask_secrets(text: str) -> str:
     return _SK_ANT.sub("***", text)
 
 
+def _mask_args(args):
+    """Mask str elements of record.args, keeping its shape (uvicorn's access formatter needs a 5-tuple)."""
+    if isinstance(args, tuple):
+        return tuple(mask_secrets(a) if isinstance(a, str) else a for a in args)
+    if isinstance(args, dict):
+        return {k: mask_secrets(v) if isinstance(v, str) else v for k, v in args.items()}
+    return args
+
+
 class SecretMaskFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = mask_secrets(record.getMessage())
-        record.args = None
+        if not record.args:
+            if isinstance(record.msg, str):
+                record.msg = mask_secrets(record.msg)
+        else:
+            # Masking a %-template could drop its placeholders, so mask args and check the rendered text.
+            record.args = _mask_args(record.args)
+            try:
+                rendered = record.getMessage()
+            except Exception:
+                rendered = None
+            if rendered is not None and mask_secrets(rendered) != rendered:
+                # A secret only appears once msg and args are combined; flatten as a last resort.
+                record.msg = mask_secrets(rendered)
+                record.args = ()
         if record.exc_info:
             # Formatter appends exc_text later; render and mask it here so tracebacks cannot leak keys.
             record.exc_text = mask_secrets(logging.Formatter().formatException(record.exc_info))
