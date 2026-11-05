@@ -32,7 +32,7 @@ def test_password_stored_hashed(db_client):
     _create(c)
     with c.app.state.db_engine.connect() as conn:
         stored = conn.execute(text("select password from board_posts")).scalar_one()
-    assert stored != "1234" and stored.startswith("$2b$")
+    assert stored != PAYLOAD["password"] and verify_password(PAYLOAD["password"], stored) and stored.startswith("$2b$")
 
 
 def test_wrong_password_403(db_client):
@@ -170,3 +170,30 @@ def test_keyword_search_escapes_like_wildcards(db_client):
     assert titles("_") == {"under_score"}
     assert titles("\\") == {"back\\slash"}
     assert titles("under_s") == {"under_score"}
+
+
+def test_board_service_has_no_invalid_escape_sequences():
+    import warnings
+    from pathlib import Path
+
+    from app.services import board_service
+
+    path = Path(board_service.__file__)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+def test_search_posts_escapes_like_wildcards(db_client):
+    from sqlalchemy.orm import Session
+
+    from app.services import board_service
+
+    c = db_client()
+    _create(c, title="할인 100% 후기", content="a")
+    _create(c, title="plain", content="b")
+    _create(c, title="under_score", content="c")
+    with Session(c.app.state.db_engine) as db:
+        titles = lambda t: {p.title for p in board_service.search_posts(db, [t])}
+        assert titles("%") == {"할인 100% 후기"}
+        assert titles("_") == {"under_score"}
