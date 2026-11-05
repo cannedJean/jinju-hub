@@ -432,3 +432,18 @@ async def test_collection_key_fetches_images_even_when_detail_is_reused(ctx_fact
     ctx2.collection_keys.add(f"tourapi.area:{JINJUSEONG}")
     await TourApiAreaSource().collect(ctx2)
     assert not fake2.ops("detailImage2") and not fake2.ops("detailCommon2")
+
+
+async def test_detail_error_does_not_store_service_key(ctx_factory, fixture_json):
+    fake = FakeTour(fixture_json)
+
+    async def handler(request):
+        if request.url.path.endswith("detailCommon2") and request.url.params["contentId"] == JINJUSEONG:
+            raise httpx.ConnectTimeout(f"timed out: {request.url}", request=request)
+        return await fake(request)
+
+    ctx = ctx_factory(httpx.MockTransport(handler), **KEY)
+    recs = await TourApiAreaSource().collect(ctx)
+    bad = next(r for r in recs if r.source_id == JINJUSEONG)
+    assert "timed out" in bad.payload["detail_error"]
+    assert "test-key" not in bad.payload["detail_error"] and "serviceKey=***" in bad.payload["detail_error"]

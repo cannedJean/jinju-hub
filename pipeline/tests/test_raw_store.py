@@ -66,3 +66,17 @@ def test_records_hint_null_for_text_bodies(tmp_path):
     assert (tmp_path / "raw" / "20261104T090507+0900" / "page-001.json").read_text(
         encoding="utf-8"
     ) == "<xml>not json</xml>"
+
+
+def test_scrub_secrets_masks_keys_and_dsn_password():
+    from jinju_pipeline.raw_store import scrub_secrets
+
+    text = (
+        "ConnectTimeout: https://apis.data.go.kr/B551011/KorService2/detailCommon2?serviceKey=AbC%2B123&pageNo=1 "
+        "authKey=KMA-SECRET postgresql://user:pw-SECRET@host/db"
+    )
+    out = scrub_secrets(text)
+    for secret in ("AbC%2B123", "KMA-SECRET", "pw-SECRET"):
+        assert secret not in out
+    assert "serviceKey=***&pageNo=1" in out and "authKey=***" in out and "postgresql://user:***@host/db" in out
+    assert scrub_secrets("plain error") == "plain error"

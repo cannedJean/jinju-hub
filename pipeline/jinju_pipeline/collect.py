@@ -6,6 +6,7 @@ import logging
 
 from jinju_pipeline.http import ConfigError
 from jinju_pipeline.models import SourceResult
+from jinju_pipeline.raw_store import scrub_secrets
 from jinju_pipeline.settings import Settings
 from jinju_pipeline.sources.base import CollectContext, Source
 from jinju_pipeline.sources.jinju_city import CITY_ENDPOINTS, JinjuCitySource
@@ -29,7 +30,7 @@ async def run_source(source: Source, ctx: CollectContext) -> SourceResult:
     except ConfigError:
         raise
     except Exception as e:  # per-source isolation: one failure must not cancel the others
-        error = f"{type(e).__name__}: {e}"
+        error = scrub_secrets(f"{type(e).__name__}: {e}")
         calls = ctx.ledger.used_by_source().get(source.name, 0)
         previous = ctx.previous.raw_by_source.get(source.name) if ctx.previous else None
         if previous:

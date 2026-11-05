@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,11 @@ KST = timezone(timedelta(hours=9))
 
 _MASKED_KEYS = ("serviceKey", "authKey")
 _MASK = "***"
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)(serviceKey\s*=\s*)[^&\s\"']+"),
+    re.compile(r"(?i)(authKey\s*=\s*)[^&\s\"']+"),
+    re.compile(r"(://[^:/\s@]+:)[^@\s]+(?=@)"),  # DSN password: scheme://user:***@host
+)
 
 
 def new_run_id(now: datetime) -> str:
@@ -22,6 +28,13 @@ def mask_params(params: dict) -> dict:
         if key in masked:
             masked[key] = _MASK
     return masked
+
+
+def scrub_secrets(text: str) -> str:
+    """Mask API keys and DSN passwords in free text (upstream error messages often embed the request URL)."""
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub(rf"\1{_MASK}", text)
+    return text
 
 
 def _records_count(body: Any) -> int | None:

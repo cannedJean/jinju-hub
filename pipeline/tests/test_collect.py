@@ -96,3 +96,11 @@ def test_default_sources_with_key_includes_tourapi():
     s = Settings(_env_file=None, data_go_kr_key="k")
     names = [x.name for x in default_sources(s)]
     assert names[-2:] == ["tourapi.area", "tourapi.festival"] and len(names) == 7
+
+
+async def test_source_error_text_is_scrubbed(ctx, ctx_with_previous):
+    leak = RuntimeError("GET https://apis.data.go.kr/x?serviceKey=LEAKED-KEY&pageNo=1 failed")
+    failed = await run_source(FakeSource("b", exc=leak), ctx)
+    assert failed.status == "failed" and "LEAKED-KEY" not in failed.error and "serviceKey=***" in failed.error
+    reused = await run_source(FakeSource("jinju_city.tourinfo", exc=leak), ctx_with_previous)
+    assert reused.status == "reused_previous" and "LEAKED-KEY" not in reused.error

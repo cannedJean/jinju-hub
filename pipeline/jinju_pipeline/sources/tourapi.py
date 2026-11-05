@@ -22,7 +22,7 @@ from jinju_pipeline.http import (
     fetch_json,
 )
 from jinju_pipeline.models import RawRecord
-from jinju_pipeline.raw_store import KST
+from jinju_pipeline.raw_store import KST, scrub_secrets
 from jinju_pipeline.settings import Settings
 from jinju_pipeline.sources.base import CollectContext
 
@@ -262,7 +262,7 @@ class TourApiAreaSource:
             state["quota"] = True
             payload["detail_pending"] = True
         except (UpstreamError, httpx.TransportError) as e:  # ConfigError propagates
-            payload["detail_error"] = str(e)
+            payload["detail_error"] = scrub_secrets(str(e))
         return record()
 
 
